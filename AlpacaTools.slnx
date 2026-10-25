@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AlpacaDashboard/AlpacaDashboard.csproj" />
+  </Folder>
+</Solution>

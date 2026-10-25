@@ -1,0 +1,234 @@
+<UserControl x:Class="AlpacaDashboard.Views.ScreenerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AlpacaDashboard.ViewModels"
+             xmlns:views="clr-namespace:AlpacaDashboard.Views">
+    <UserControl.Resources>
+        <Style x:Key="FilterLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+        </Style>
+        <Style x:Key="FilterCheck" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,18,0" />
+        </Style>
+        <!-- Signed percent cell (fractions), colored by direction -->
+        <DataTemplate x:Key="PctCell">
+            <TextBlock Style="{StaticResource NumCell}" Text="{Binding Converter={StaticResource Signed}, ConverterParameter=P}"
+                       Foreground="{Binding Converter={StaticResource SignBrush}}" />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Universe: a stock list, or every crypto pair; and the Run button -->
+        <DockPanel Grid.Row="0" Margin="6,0,6,6">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{Binding LoadingText}" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"
+                           Visibility="{Binding IsLoading, Converter={StaticResource NotEmptyToVisibility}}" />
+                <TextBlock Text="{Binding Status}" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <Button Content="⟳ Run" Command="{Binding RunCommand}" Style="{StaticResource GhostButton}" />
+            </StackPanel>
+            <CheckBox DockPanel.Dock="Left" Content="Crypto only" IsChecked="{Binding CryptoOnly}" Style="{StaticResource FilterCheck}"
+                      FontWeight="SemiBold" ToolTip="Screen every tradable crypto pair instead of a stock list" />
+            <Border DockPanel.Dock="Left" Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="3"
+                    Visibility="{Binding CryptoOnly, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Top gainers" Style="{StaticResource RangeButton}" Command="{Binding SetSourceCommand}" CommandParameter="{x:Static vm:ScreenerSource.Gainers}"
+                            Tag="{Binding Source, Converter={StaticResource EnumEquals}, ConverterParameter=Gainers}" />
+                    <Button Content="Top losers" Style="{StaticResource RangeButton}" Command="{Binding SetSourceCommand}" CommandParameter="{x:Static vm:ScreenerSource.Losers}"
+                            Tag="{Binding Source, Converter={StaticResource EnumEquals}, ConverterParameter=Losers}" />
+                    <Button Content="Most active: volume" Style="{StaticResource RangeButton}" Command="{Binding SetSourceCommand}" CommandParameter="{x:Static vm:ScreenerSource.MostActiveVolume}"
+                            Tag="{Binding Source, Converter={StaticResource EnumEquals}, ConverterParameter=MostActiveVolume}" />
+                    <Button Content="Most active: trades" Style="{StaticResource RangeButton}" Command="{Binding SetSourceCommand}" CommandParameter="{x:Static vm:ScreenerSource.MostActiveTrades}"
+                            Tag="{Binding Source, Converter={StaticResource EnumEquals}, ConverterParameter=MostActiveTrades}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="All crypto pairs — use the filters below to narrow them down" Foreground="{StaticResource SecondaryBrush}"
+                       FontSize="12" VerticalAlignment="Center"
+                       Visibility="{Binding CryptoOnly, Converter={StaticResource NotEmptyToVisibility}}" />
+        </DockPanel>
+
+        <!-- Filters: applied instantly to the last run's results, no API calls -->
+        <Border Grid.Row="1" Style="{StaticResource Card}">
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding FilterGroups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="0,0,0,6">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding Title}" Width="100" Margin="0,22,0,0"
+                                           FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SecondaryBrush}" />
+                                <ItemsControl ItemsSource="{Binding Filters}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Width="160" Margin="0,0,10,6" ToolTip="{Binding Tooltip}"
+                                                        Visibility="{Binding IsVisible, Converter={StaticResource NotEmptyToVisibility}}">
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource FilterLabel}" />
+                                                <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Selected}" DisplayMemberPath="Label">
+                                                    <ComboBox.Style>
+                                                        <Style TargetType="ComboBox" BasedOn="{StaticResource DarkCombo}">
+                                                            <Style.Triggers>
+                                                                <!-- Set filters stand out -->
+                                                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ComboBox.Style>
+                                                </ComboBox>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Checkboxes, search, reset -->
+                <DockPanel Margin="0,6,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ActiveFilterCount, StringFormat='{}{0} filters set'}" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <Button Content="Reset filters" Command="{Binding ResetFiltersCommand}" Style="{StaticResource GhostButton}" Padding="10,4" />
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Left" Text="Options" Width="100" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource SecondaryBrush}" VerticalAlignment="Center" />
+                    <WrapPanel VerticalAlignment="Center">
+                        <CheckBox Content="Hide symbols I hold" IsChecked="{Binding HideHeld}" Style="{StaticResource FilterCheck}" />
+                        <CheckBox Content="Only symbols I hold" IsChecked="{Binding OnlyHeld}" Style="{StaticResource FilterCheck}" />
+                        <CheckBox Content="Exclude stablecoins" IsChecked="{Binding ExcludeStablecoins}" Style="{StaticResource FilterCheck}"
+                                  ToolTip="Hide USDT, USDC, DAI and other dollar-pegged coins"
+                                  Visibility="{Binding CryptoOnly, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <TextBlock Text="Symbol" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBox Style="{StaticResource InputBox}" Width="120" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+                                 ToolTip="Show symbols containing this text" />
+                    </WrapPanel>
+                </DockPanel>
+
+                <TextBlock Text="{Binding FeedNote}" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,10,0,0" />
+                <TextBlock Text="{Binding Warning}" FontSize="12" Foreground="{StaticResource WarnBrush}" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding Warning, Converter={StaticResource NotEmptyToVisibility}}" />
+                <Border Margin="0,8,0,0" Padding="12,8" CornerRadius="8" Background="#33e66767" BorderBrush="{StaticResource BadBrush}" BorderThickness="1"
+                        Visibility="{Binding Error, Converter={StaticResource NotEmptyToVisibility}}">
+                    <TextBlock Text="{Binding Error, StringFormat='✕ {0}'}" TextWrapping="Wrap" />
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Results; the chart of the clicked row docks on the right only while open -->
+        <DockPanel Grid.Row="2">
+            <Border DockPanel.Dock="Right" Width="560" Style="{StaticResource Card}"
+                    Visibility="{Binding Chart, Converter={StaticResource NotEmptyToVisibility}}">
+                <views:SymbolChartView DataContext="{Binding Chart}"
+                                       CloseCommand="{Binding DataContext.CloseChartCommand, ElementName=Root}" />
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top">
+                        <TextBlock DockPanel.Dock="Right" Text="Click a row for its chart · double-click to open it in a window · right-click to trade · click a header to sort"
+                                   FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="Results" Style="{StaticResource CardTitle}" />
+                    </DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Nothing matches these filters." Foreground="{StaticResource MutedBrush}"
+                               Visibility="{Binding Results.Count, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+                    <DataGrid x:Name="ResultsGrid" ItemsSource="{Binding Results}" Style="{StaticResource DarkGrid}"
+                              HorizontalScrollBarVisibility="Auto" FrozenColumnCount="2"
+                              MouseLeftButtonUp="ResultsGrid_MouseLeftButtonUp" ContextMenuOpening="ResultsGrid_ContextMenuOpening">
+                        <!-- Filled on open from the row's current position: buy, or that position's trade actions -->
+                        <DataGrid.ContextMenu>
+                            <ContextMenu />
+                        </DataGrid.ContextMenu>
+                        <DataGrid.InputBindings>
+                            <MouseBinding Gesture="LeftDoubleClick" Command="{Binding OpenChartWindowCommand}"
+                                          CommandParameter="{Binding SelectedItem, ElementName=ResultsGrid}" />
+                        </DataGrid.InputBindings>
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="22" SortMemberPath="IsHeld">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="◆" FontSize="10" HorizontalAlignment="Center" Foreground="{StaticResource AccentBrush}"
+                                                   ToolTip="You hold this symbol in this account"
+                                                   Visibility="{Binding IsHeld, Converter={StaticResource NotEmptyToVisibility}}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol, Mode=OneWay}" Width="Auto" MinWidth="72" FontWeight="SemiBold" />
+                            <DataGridTextColumn Header="Price" Binding="{Binding PriceText, Mode=OneWay}" SortMemberPath="Price" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTemplateColumn Header="Today" Width="Auto" SortMemberPath="ChangePct">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding ChangePct}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Week" Width="Auto" SortMemberPath="Perf1W">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding Perf1W}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Month" Width="Auto" SortMemberPath="Perf1M">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding Perf1M}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="3 mo" Width="Auto" SortMemberPath="Perf3M">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding Perf3M}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="$ Volume" Binding="{Binding DollarVolumeText, Mode=OneWay}" SortMemberPath="DollarVolume" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTextColumn Header="Avg $ vol" Binding="{Binding AvgDollarVolumeText, Mode=OneWay}" SortMemberPath="AvgDollarVolume" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTextColumn Header="Rel vol" Binding="{Binding RelVolumeText, Mode=OneWay}" SortMemberPath="RelVolume" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTextColumn Header="RSI" Binding="{Binding RsiText, Mode=OneWay}" SortMemberPath="Rsi14" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTemplateColumn Header="vs SMA50" Width="Auto" SortMemberPath="VsSma50">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding VsSma50}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="vs SMA200" Width="Auto" SortMemberPath="VsSma200">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding VsSma200}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="From 52w high" Width="Auto" SortMemberPath="FromHigh52W">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentPresenter Content="{Binding FromHigh52W}" ContentTemplate="{StaticResource PctCell}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Volatility" Binding="{Binding VolatilityText, Mode=OneWay}" SortMemberPath="Volatility" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <DataGridTextColumn Header="Volume" Binding="{Binding VolumeText, Mode=OneWay}" SortMemberPath="Volume" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                            <!-- Spare width lands here, keeping data columns compact -->
+                            <DataGridTemplateColumn Header="" Width="*" CanUserSort="False" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </DockPanel>
+    </Grid>
+</UserControl>

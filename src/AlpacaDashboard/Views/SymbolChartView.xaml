@@ -1,0 +1,85 @@
+<UserControl x:Class="AlpacaDashboard.Views.SymbolChartView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AlpacaDashboard.ViewModels"
+             xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+             x:Name="Root">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <!-- Minimums keep volume readable when the window is small -->
+            <RowDefinition Height="3*" MinHeight="160" />
+            <RowDefinition Height="*" MinHeight="100" />
+        </Grid.RowDefinitions>
+
+        <!-- Header: symbol, last price, day change -->
+        <DockPanel Grid.Row="0">
+            <!-- Close (✕) only when the host supplies a CloseCommand, e.g. the inline dashboard card -->
+            <Button DockPanel.Dock="Right" Content="✕" Command="{Binding CloseCommand, ElementName=Root}" Style="{StaticResource GhostButton}"
+                    Padding="10,4" Margin="8,0,0,0" VerticalAlignment="Top" ToolTip="Close and show portfolio value"
+                    Visibility="{Binding CloseCommand, ElementName=Root, Converter={StaticResource NotEmptyToVisibility}}" />
+            <Button DockPanel.Dock="Right" Content="⟳ Refresh" Command="{Binding LoadCommand}" Style="{StaticResource GhostButton}" VerticalAlignment="Top" />
+            <StackPanel>
+                <!-- Wraps the day change under the price when the panel is narrow -->
+                <WrapPanel>
+                    <TextBlock Text="{Binding Symbol}" FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding LastPriceText, FallbackValue='—'}" FontSize="24" Margin="16,0,0,0" />
+                    <TextBlock FontSize="14" VerticalAlignment="Bottom" Margin="12,0,0,4"
+                               Foreground="{Binding DayChange, Converter={StaticResource SignBrush}}">
+                        <Run Text="{Binding DayChange, Converter={StaticResource Signed}, Mode=OneWay}" />
+                        <Run Text="{Binding DayChangePct, Converter={StaticResource Signed}, ConverterParameter=P, StringFormat='({0})', Mode=OneWay}" />
+                        <Run Text="today" Foreground="{StaticResource MutedBrush}" />
+                    </TextBlock>
+                </WrapPanel>
+                <TextBlock Text="{Binding FeedNote}" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Range selector above the chart -->
+        <DockPanel Grid.Row="1" Margin="0,14,0,6">
+            <Border DockPanel.Dock="Right" Background="{StaticResource PageBrush}" CornerRadius="8" Padding="3">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="1D" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.Day}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Day}" />
+                    <Button Content="1W" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.Week}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Week}" />
+                    <Button Content="1M" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.Month}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Month}" />
+                    <Button Content="3M" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.ThreeMonths}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=ThreeMonths}" />
+                    <Button Content="1Y" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.Year}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Year}" />
+                    <Button Content="5Y" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static vm:ChartRange.FiveYears}"
+                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=FiveYears}" />
+                </StackPanel>
+            </Border>
+            <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="{Binding RangeChangePct, Converter={StaticResource SignBrush}}">
+                <Run Text="{Binding RangeChangePct, Converter={StaticResource Signed}, ConverterParameter=P, Mode=OneWay}" />
+                <Run Text="over selected range" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+            </TextBlock>
+            <TextBlock Text="  Loading…" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center"
+                       Visibility="{Binding IsLoading, Converter={StaticResource NotEmptyToVisibility}}" />
+        </DockPanel>
+
+        <!-- Charts stay hidden until there are bars, so no placeholder 0–10 axes show -->
+        <lvc:CartesianChart Grid.Row="2" Series="{Binding PriceSeries}" XAxes="{Binding PriceXAxes}" YAxes="{Binding PriceYAxes}"
+                            LegendPosition="Hidden" TooltipPosition="Top" ZoomMode="X" Background="Transparent"
+                            Visibility="{Binding HasData, Converter={StaticResource NotEmptyToVisibility}}" />
+        <lvc:CartesianChart Grid.Row="3" Series="{Binding VolumeSeries}" XAxes="{Binding VolumeXAxes}" YAxes="{Binding VolumeYAxes}"
+                            LegendPosition="Hidden" TooltipPosition="Top" Background="Transparent" Margin="0,4,0,0"
+                            Visibility="{Binding HasData, Converter={StaticResource NotEmptyToVisibility}}" />
+
+        <!-- Until the first bars arrive: what it's waiting on -->
+        <TextBlock Grid.Row="2" Text="{Binding LoadingMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   FontSize="13" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" TextAlignment="Center"
+                   Visibility="{Binding LoadingMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+
+        <!-- Error overlay -->
+        <Border Grid.Row="2" VerticalAlignment="Top" Margin="0,8" Padding="12,8" CornerRadius="8" Background="#33e66767"
+                BorderBrush="{StaticResource BadBrush}" BorderThickness="1"
+                Visibility="{Binding Error, Converter={StaticResource NotEmptyToVisibility}}">
+            <TextBlock Text="{Binding Error, StringFormat='✕ {0}'}" TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</UserControl>

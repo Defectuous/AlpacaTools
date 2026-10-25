@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- LiveCharts2 WPF pulls in SkiaSharp/OpenTK packages that only declare .NET Framework TFMs; they run fine on .NET 10. -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
+    <AssemblyTitle>Alpaca Dashboard</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+  </ItemGroup>
+
+</Project>

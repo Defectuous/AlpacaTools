@@ -1,0 +1,493 @@
+<Window x:Class="AlpacaDashboard.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AlpacaDashboard.ViewModels"
+        xmlns:svc="clr-namespace:AlpacaDashboard.Services"
+        xmlns:views="clr-namespace:AlpacaDashboard.Views"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        Title="Alpaca Dashboard" Width="1440" Height="920" MinWidth="1000" MinHeight="640"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized"
+        Background="{StaticResource PageBrush}" Foreground="{StaticResource InkBrush}">
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="270" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== Sidebar: followed accounts ===== -->
+        <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="14">
+                <TextBlock DockPanel.Dock="Top" Text="Accounts" FontSize="18" FontWeight="SemiBold" Margin="6,4,0,14" />
+
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                    <Button Content="+ Add account" Command="{Binding AddAccountCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8" />
+                    <UniformGrid Columns="2">
+                        <Button Content="Edit" Command="{Binding EditAccountCommand}" Style="{StaticResource GhostButton}" Margin="0,0,4,0" />
+                        <Button Content="Remove" Command="{Binding RemoveAccountCommand}" Style="{StaticResource GhostButton}" Margin="4,0,0,0" />
+                    </UniformGrid>
+                </StackPanel>
+
+                <ListBox ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}"
+                         Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Margin" Value="0,0,0,6" />
+                            <Setter Property="Cursor" Value="Hand" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="8" Padding="12,10" Background="Transparent">
+                                            <ContentPresenter />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceSelectedBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:AccountViewModel}">
+                            <StackPanel>
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Right" Style="{StaticResource Badge}" BorderBrush="{StaticResource GridlineBrush}">
+                                        <TextBlock Text="{Binding ModeLabel}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SecondaryBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                                <TextBlock Text="{Binding Account.Equity, StringFormat=C2, FallbackValue='—'}" FontSize="13" Margin="0,4,0,0"
+                                           Foreground="{StaticResource SecondaryBrush}" />
+                                <TextBlock Text="{Binding Account.DayChange, Converter={StaticResource Signed}, FallbackValue=''}" FontSize="12"
+                                           Foreground="{Binding Account.DayChange, Converter={StaticResource SignBrush}}" />
+                                <TextBlock Text="⚠ Connection error" FontSize="12" Foreground="{StaticResource WarnBrush}" ToolTip="{Binding Error}"
+                                           Visibility="{Binding Error, Converter={StaticResource NotEmptyToVisibility}}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== Empty state ===== -->
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Visibility="{Binding HasSelection, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}">
+            <TextBlock Text="Follow an Alpaca account" FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Text="Add an API key pair (paper or live) to see its portfolio here." Foreground="{StaticResource SecondaryBrush}"
+                       Margin="0,8,0,18" HorizontalAlignment="Center" />
+            <Button Content="+ Add account" Command="{Binding AddAccountCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- ===== Selected account: tab strip, then the portfolio dashboard or the screener ===== -->
+        <DockPanel Grid.Column="1" Visibility="{Binding HasSelection, Converter={StaticResource NotEmptyToVisibility}}">
+        <DockPanel DockPanel.Dock="Top" Margin="24,14,24,0">
+            <!-- Symbol search: a pick opens its chart on the current tab -->
+            <views:SymbolSearchBox x:Name="SearchBox" DockPanel.Dock="Right" DataContext="{Binding Search}" Width="340" VerticalAlignment="Center" />
+            <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" Padding="3" HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Portfolio" Style="{StaticResource RangeButton}" Command="{Binding SetTabCommand}" CommandParameter="{x:Static vm:MainTab.Portfolio}"
+                            Tag="{Binding IsPortfolioTab}" />
+                    <Button Content="Screener" Style="{StaticResource RangeButton}" Command="{Binding SetTabCommand}" CommandParameter="{x:Static vm:MainTab.Screener}"
+                            Tag="{Binding IsScreenerTab}" />
+                </StackPanel>
+            </Border>
+        </DockPanel>
+        <Grid>
+        <views:ScreenerView DataContext="{Binding SelectedAccount.Screener}" Margin="18,10,18,18"
+                            Visibility="{Binding DataContext.IsScreenerTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource NotEmptyToVisibility}}" />
+        <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedAccount}"
+                      Visibility="{Binding DataContext.IsPortfolioTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource NotEmptyToVisibility}}">
+            <StackPanel Margin="18,14,18,24">
+
+                <!-- Header -->
+                <DockPanel Margin="6,0,6,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding LastUpdated, StringFormat='Updated {0:h:mm:ss tt}'}" Foreground="{StaticResource MutedBrush}"
+                                   FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <Button Content="⟳ Refresh" Command="{Binding RefreshAllCommand}" Style="{StaticResource GhostButton}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" FontSize="24" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Border Style="{StaticResource Badge}" BorderBrush="{StaticResource GridlineBrush}" Margin="12,0,0,0">
+                            <TextBlock Text="{Binding ModeLabel}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SecondaryBrush}" />
+                        </Border>
+                        <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <Run Text="{Binding Account.AccountNumber, Mode=OneWay}" />
+                            <Run Text="·" />
+                            <Run Text="{Binding Account.Status, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBlock Text="Loading…" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Visibility="{Binding IsLoading, Converter={StaticResource NotEmptyToVisibility}}" />
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Market data plan + live stream status -->
+                <StackPanel Orientation="Horizontal" Margin="6,0,6,6">
+                    <Border ToolTip="{Binding PlanTooltip}" BorderThickness="1" CornerRadius="4" Padding="6,1" VerticalAlignment="Center">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{StaticResource GridlineBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPremiumPlan}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource SecondaryBrush}">
+                            <Run Text="DATA:" /> <Run Text="{Binding PlanBadge, Mode=OneWay}" />
+                        </TextBlock>
+                    </Border>
+                    <TextBlock Text="{Binding PlanDescription}" Foreground="{StaticResource MutedBrush}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" />
+                    <TextBlock VerticalAlignment="Center" FontSize="12" Margin="16,0,0,0"
+                               Visibility="{Binding StreamStatus, Converter={StaticResource NotEmptyToVisibility}}">
+                        <Run x:Name="StreamDot" Text="●">
+                            <Run.Style>
+                                <Style TargetType="Run">
+                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding StreamState}" Value="Live">
+                                            <Setter Property="Foreground" Value="{StaticResource GoodBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding StreamState}" Value="Reconnecting">
+                                            <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding StreamState}" Value="Failed">
+                                            <Setter Property="Foreground" Value="{StaticResource BadBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Run.Style>
+                        </Run>
+                        <Run Text="{Binding StreamStatus, Mode=OneWay}" Foreground="{StaticResource SecondaryBrush}" />
+                    </TextBlock>
+                    <TextBlock Text="· Orders pushed live" FontSize="12" Foreground="{StaticResource SecondaryBrush}" VerticalAlignment="Center" Margin="6,0,0,0"
+                               ToolTip="Alpaca's trade-updates stream is connected: positions and orders refresh when an order changes, not on a timer."
+                               Visibility="{Binding TradeStreamConnected, Converter={StaticResource NotEmptyToVisibility}}" />
+                    <TextBlock Text="BOT PRIORITY" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}" VerticalAlignment="Center" Margin="12,0,0,0"
+                               ToolTip="This key is shared with a bot that comes first. Change it under Edit."
+                               Visibility="{Binding BotPriority, Converter={StaticResource NotEmptyToVisibility}}" />
+                    <!-- The dashboard's own request rate on this key; turns amber while backing off -->
+                    <TextBlock Text="{Binding ApiUsage}" ToolTip="{Binding ApiUsageTooltip}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsApiThrottled}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- Local copy of the account's history; amber when it disagrees with Alpaca's positions -->
+                    <TextBlock Text="{Binding LedgerStatus}" ToolTip="{Binding LedgerTooltip}" FontSize="12" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding LedgerHasMismatch}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Error banner -->
+                <Border Margin="6" Padding="12,8" CornerRadius="8" Background="#33e66767" BorderBrush="{StaticResource BadBrush}" BorderThickness="1"
+                        Visibility="{Binding Error, Converter={StaticResource NotEmptyToVisibility}}">
+                    <TextBlock Text="{Binding Error, StringFormat='✕ {0}'}" TextWrapping="Wrap" />
+                </Border>
+
+                <!-- KPI row -->
+                <UniformGrid Columns="5">
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Equity" Style="{StaticResource KpiLabel}" />
+                            <TextBlock Text="{Binding LiveEquity, StringFormat=C2, TargetNullValue='—'}" Style="{StaticResource KpiValue}" FontSize="26" />
+                            <TextBlock FontSize="12" Foreground="{Binding LiveDayChange, Converter={StaticResource SignBrush}}">
+                                <Run Text="{Binding LiveDayChange, Converter={StaticResource Signed}, Mode=OneWay}" />
+                                <Run Text="{Binding LiveDayChangePct, Converter={StaticResource Signed}, ConverterParameter=P, StringFormat='({0})', Mode=OneWay}" />
+                                <Run Text="today" Foreground="{StaticResource MutedBrush}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Unrealized P/L" Style="{StaticResource KpiLabel}" />
+                            <TextBlock Text="{Binding TotalUnrealizedPl, Converter={StaticResource Signed}}" Style="{StaticResource KpiValue}"
+                                       Foreground="{Binding TotalUnrealizedPl, Converter={StaticResource SignBrush}}" />
+                            <TextBlock FontSize="12" Foreground="{StaticResource MutedBrush}">
+                                <Run Text="{Binding TotalUnrealizedPlPct, Converter={StaticResource Signed}, ConverterParameter=P, Mode=OneWay}" />
+                                <Run Text="on cost basis" />
+                            </TextBlock>
+                            <TextBlock FontSize="12" Foreground="{StaticResource MutedBrush}"
+                                       ToolTip="Estimated fees to close every position at market now. Hover a row's Est. fees for its breakdown.">
+                                <Run Text="Est. fees to close all:" />
+                                <Run Text="{Binding TotalEstimatedFees, StringFormat=C2, Mode=OneWay}" Foreground="{StaticResource SecondaryBrush}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Long market value" Style="{StaticResource KpiLabel}" />
+                            <TextBlock Text="{Binding Account.LongMarketValue, StringFormat=C2, FallbackValue='—'}" Style="{StaticResource KpiValue}" />
+                            <TextBlock Text="{Binding Positions.Count, StringFormat='{}{0} positions'}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Cash" Style="{StaticResource KpiLabel}" />
+                            <TextBlock Text="{Binding Account.Cash, StringFormat=C2, FallbackValue='—'}" Style="{StaticResource KpiValue}" />
+                            <TextBlock Text="{Binding Account.Currency}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Buying power" Style="{StaticResource KpiLabel}" />
+                            <TextBlock Text="{Binding Account.BuyingPower, StringFormat=C2, FallbackValue='—'}" Style="{StaticResource KpiValue}" />
+                            <TextBlock Text="{Binding Account.DaytradeCount, StringFormat='{}{0} day trades (5d)'}" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <!-- Single-clicked position's price chart, in place of the equity history; ✕ closes it -->
+                <Border Style="{StaticResource Card}" Visibility="{Binding InlineChart, Converter={StaticResource NotEmptyToVisibility}}">
+                    <views:SymbolChartView DataContext="{Binding InlineChart}" Height="420"
+                                           CloseCommand="{Binding DataContext.CloseInlineChartCommand, RelativeSource={RelativeSource AncestorType=ScrollViewer}}" />
+                </Border>
+
+                <!-- Equity history -->
+                <Border Style="{StaticResource Card}" Visibility="{Binding InlineChart, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}">
+                    <StackPanel>
+                        <DockPanel>
+                            <!-- Range selector sits above the chart -->
+                            <Border DockPanel.Dock="Right" Background="{StaticResource PageBrush}" CornerRadius="8" Padding="3" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="1D" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.Day}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Day}" />
+                                    <Button Content="1W" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.Week}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Week}" />
+                                    <Button Content="1M" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.Month}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Month}" />
+                                    <Button Content="3M" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.ThreeMonths}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=ThreeMonths}" />
+                                    <Button Content="1Y" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.Year}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=Year}" />
+                                    <Button Content="All" Style="{StaticResource RangeButton}" Command="{Binding SetRangeCommand}" CommandParameter="{x:Static svc:HistoryRange.All}"
+                                            Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel>
+                                <TextBlock Text="Portfolio value" Style="{StaticResource CardTitle}" />
+                                <TextBlock FontSize="14" Foreground="{Binding RangeChange, Converter={StaticResource SignBrush}}">
+                                    <Run Text="{Binding RangeChange, Converter={StaticResource Signed}, Mode=OneWay}" />
+                                    <Run Text="{Binding RangeChangePct, Converter={StaticResource Signed}, ConverterParameter=P, StringFormat='({0})', Mode=OneWay}" />
+                                    <Run Text="over selected range" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                </TextBlock>
+                            </StackPanel>
+                        </DockPanel>
+                        <lvc:CartesianChart Height="320" Margin="0,12,0,0"
+                                            Series="{Binding EquitySeries}" XAxes="{Binding EquityXAxes}" YAxes="{Binding EquityYAxes}"
+                                            LegendPosition="Hidden" TooltipPosition="Top" ZoomMode="X" Background="Transparent" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Positions + allocation -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="5*" />
+                        <ColumnDefinition Width="2*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <DockPanel DockPanel.Dock="Top">
+                                <TextBlock DockPanel.Dock="Right" Text="Click a row for its price chart · double-click to open it in a window" FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                <TextBlock Text="Positions" Style="{StaticResource CardTitle}" />
+                            </DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="No open positions." Foreground="{StaticResource MutedBrush}"
+                                       Visibility="{Binding Positions.Count, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+                            <DataGrid x:Name="PositionsGrid" ItemsSource="{Binding Positions}" Style="{StaticResource DarkGrid}" MaxHeight="420"
+                                      MouseLeftButtonUp="PositionsGrid_MouseLeftButtonUp">
+                                <DataGrid.InputBindings>
+                                    <MouseBinding Gesture="LeftDoubleClick" Command="{Binding OpenChartCommand}"
+                                                  CommandParameter="{Binding SelectedItem, ElementName=PositionsGrid}" />
+                                </DataGrid.InputBindings>
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="" Width="22" CanUserSort="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock HorizontalAlignment="Center" FontSize="10">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value="" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsOverStreamLimit}" Value="True">
+                                                                    <Setter Property="Text" Value="◌" />
+                                                                    <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                                                    <Setter Property="ToolTip" Value="Not streamed (plan symbol limit); updates on each 60s refresh" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsLive}" Value="True">
+                                                                    <Setter Property="Text" Value="●" />
+                                                                    <Setter Property="Foreground" Value="{StaticResource GoodBrush}" />
+                                                                    <Setter Property="ToolTip" Value="Live price from the market data stream" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol, Mode=OneWay}" Width="Auto" MinWidth="64" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="Qty" Binding="{Binding Qty, Mode=OneWay, StringFormat='0.####'}" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                                    <DataGridTextColumn Header="Avg entry" Binding="{Binding AvgEntryText, Mode=OneWay}" SortMemberPath="AvgEntryPrice" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                                    <DataGridTextColumn Header="Price" Binding="{Binding PriceText, Mode=OneWay}" SortMemberPath="CurrentPrice" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                                    <DataGridTextColumn Header="Market value" Binding="{Binding MarketValue, Mode=OneWay, StringFormat=C2}" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                                    <DataGridTemplateColumn Header="Today" Width="Auto" SortMemberPath="ChangeToday">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource NumCell}" Text="{Binding ChangeToday, Converter={StaticResource Signed}, ConverterParameter=P}"
+                                                           Foreground="{Binding ChangeToday, Converter={StaticResource SignBrush}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Unrealized P/L" Width="Auto" SortMemberPath="UnrealizedPl">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource NumCell}" Text="{Binding UnrealizedPl, Converter={StaticResource Signed}}"
+                                                           Foreground="{Binding UnrealizedPl, Converter={StaticResource SignBrush}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Est. fees" Width="Auto" SortMemberPath="EstimatedFees">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <!-- A cost, not a gain/loss: neutral ink; hover for the breakdown -->
+                                                <TextBlock Style="{StaticResource NumCell}" Text="{Binding EstimatedFees, StringFormat=C2}"
+                                                           Foreground="{StaticResource SecondaryBrush}" Background="Transparent"
+                                                           ToolTip="{Binding FeeTooltip}" ToolTipService.ShowDuration="60000" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="P/L %" Width="Auto" SortMemberPath="UnrealizedPlPct">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource NumCell}" Text="{Binding UnrealizedPlPct, Converter={StaticResource Signed}, ConverterParameter=P}"
+                                                           Foreground="{Binding UnrealizedPlPct, Converter={StaticResource SignBrush}}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="" Width="Auto" CanUserSort="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Button Content="Chart" Style="{StaticResource GhostButton}" Padding="8,1" FontSize="11"
+                                                            Command="{Binding DataContext.OpenChartCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Content="Trade" Style="{StaticResource GhostButton}" Padding="8,1" FontSize="11" Margin="6,0,0,0"
+                                                            ToolTip="Liquidate, sell an amount, or set a stop limit"
+                                                            Command="{Binding DataContext.OpenTradeCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                            CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <!-- Spare width lands here, keeping data columns compact -->
+                                    <DataGridTemplateColumn Header="" Width="*" CanUserSort="False" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Allocation by market value" Style="{StaticResource CardTitle}" />
+                            <!-- Custom legend: every slice with its value and share, so identity never relies on color alone -->
+                            <ItemsControl DockPanel.Dock="Bottom" ItemsSource="{Binding AllocationLegend}" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,3">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Share, StringFormat=P1}" Width="56" TextAlignment="Right"
+                                                       Foreground="{StaticResource InkBrush}" Typography.NumeralAlignment="Tabular" />
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding Value, StringFormat=C0}" TextAlignment="Right"
+                                                       Foreground="{StaticResource SecondaryBrush}" Typography.NumeralAlignment="Tabular" />
+                                            <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{Binding Brush}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource InkBrush}" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <lvc:PieChart Series="{Binding AllocationSeries}" Height="230" LegendPosition="Hidden" Background="Transparent" />
+                        </DockPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Activity + open orders -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Recent activity" Style="{StaticResource CardTitle}" />
+                            <TextBlock DockPanel.Dock="Top" Text="No recent activity." Foreground="{StaticResource MutedBrush}"
+                                       Visibility="{Binding Activities.Count, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+                            <DataGrid ItemsSource="{Binding Activities}" Style="{StaticResource DarkGrid}" MaxHeight="360">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="When" Binding="{Binding When, StringFormat='MMM d, h:mm tt'}" Width="Auto"
+                                                        Foreground="{StaticResource SecondaryBrush}" />
+                                    <DataGridTextColumn Header="Type" Binding="{Binding ActivityType}" Width="Auto"
+                                                        Foreground="{StaticResource SecondaryBrush}" />
+                                    <DataGridTextColumn Header="Details" Binding="{Binding Summary}" Width="*" />
+                                    <DataGridTemplateColumn Header="Amount" Width="Auto" SortMemberPath="Amount">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Style="{StaticResource NumCell}" Text="{Binding Amount, StringFormat=C2}"
+                                                           Foreground="{StaticResource SecondaryBrush}" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="Open orders" Style="{StaticResource CardTitle}" />
+                            <TextBlock DockPanel.Dock="Top" Text="No open orders." Foreground="{StaticResource MutedBrush}"
+                                       Visibility="{Binding OpenOrders.Count, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+                            <DataGrid ItemsSource="{Binding OpenOrders}" Style="{StaticResource DarkGrid}" MaxHeight="360">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol}" Width="Auto" FontWeight="SemiBold" />
+                                    <DataGridTextColumn Header="Side" Binding="{Binding Side}" Width="Auto" />
+                                    <DataGridTextColumn Header="Filled / Qty" Binding="{Binding QtyText}" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                                    <DataGridTextColumn Header="Price" Binding="{Binding PriceText}" Width="*" />
+                                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="Auto" Foreground="{StaticResource SecondaryBrush}" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+        </Grid>
+        </DockPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,76 @@
+<UserControl x:Class="AlpacaDashboard.Views.SymbolSearchBox"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:AlpacaDashboard.ViewModels">
+    <Grid>
+        <TextBox x:Name="Input" Style="{StaticResource InputBox}" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                 VerticalContentAlignment="Center" Padding="26,5,6,5"
+                 PreviewKeyDown="Input_PreviewKeyDown" GotKeyboardFocus="Input_GotKeyboardFocus"
+                 ToolTip="Search every stock and crypto pair by symbol or name (Ctrl+F)" />
+        <TextBlock Text="⌕" FontSize="15" Foreground="{StaticResource MutedBrush}" IsHitTestVisible="False"
+                   VerticalAlignment="Center" Margin="8,0,0,2" />
+        <!-- Placeholder until something is typed -->
+        <TextBlock Text="Search symbols or names…  Ctrl+F" Foreground="{StaticResource MutedBrush}" FontSize="12" IsHitTestVisible="False"
+                   VerticalAlignment="Center" Margin="28,0,0,0"
+                   Visibility="{Binding Query, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+
+        <Popup IsOpen="{Binding IsOpen, Mode=TwoWay}" PlacementTarget="{Binding ElementName=Input}" Placement="Bottom"
+               StaysOpen="False" AllowsTransparency="True" VerticalOffset="4"
+               MinWidth="{Binding ActualWidth, ElementName=Input}">
+            <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource GridlineBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="4" MaxWidth="460">
+                <StackPanel>
+                    <TextBlock Text="{Binding Message}" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="8,6" TextWrapping="Wrap"
+                               Visibility="{Binding Message, Converter={StaticResource NotEmptyToVisibility}}" />
+                    <ListBox x:Name="List" ItemsSource="{Binding Suggestions}" SelectedItem="{Binding Selected}"
+                             Background="Transparent" BorderThickness="0" Focusable="False" HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
+                             Visibility="{Binding Suggestions.Count, Converter={StaticResource NotEmptyToVisibility}}">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Bd" CornerRadius="5" Padding="8,5" Background="Transparent">
+                                                <ContentPresenter />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceSelectedBrush}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:SymbolSuggestion}">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Right" Style="{StaticResource Badge}" BorderBrush="{StaticResource GridlineBrush}" Margin="8,0,0,0"
+                                            Visibility="{Binding IsCrypto, Converter={StaticResource NotEmptyToVisibility}}">
+                                        <TextBlock Text="CRYPTO" FontSize="9" FontWeight="SemiBold" Foreground="{StaticResource SecondaryBrush}" />
+                                    </Border>
+                                    <TextBlock DockPanel.Dock="Right" Text="◆" FontSize="10" Foreground="{StaticResource AccentBrush}" Margin="8,0,0,0"
+                                               VerticalAlignment="Center" ToolTip="You hold this symbol in this account"
+                                               Visibility="{Binding IsHeld, Converter={StaticResource NotEmptyToVisibility}}" />
+                                    <TextBlock Text="{Binding Symbol}" Width="88" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" />
+                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource SecondaryBrush}" FontSize="12"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip="{Binding Name}" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Text="↑↓ to choose · Enter opens its chart · Esc closes" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="8,4,8,2"
+                               Visibility="{Binding Suggestions.Count, Converter={StaticResource NotEmptyToVisibility}}" />
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

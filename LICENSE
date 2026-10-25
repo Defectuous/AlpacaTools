@@ -1,0 +1,114 @@
+AlpacaTools License (Attribution + Commercial Royalty)
+Version 1.0
+
+Copyright (c) 2026 Defectuous (https://github.com/Defectuous)
+
+1. Definitions
+
+   "Software" means the source code, binaries, documentation and other files in
+   this repository, and any portion of them.
+
+   "Licensor" means the copyright holder named above.
+
+   "You" means the individual or legal entity exercising rights under this
+   license, together with any entity that controls, is controlled by, or is
+   under common control with it.
+
+   "Derivative Work" means any work that is based on, modified from, or
+   incorporates any part of the Software.
+
+   "Commercial Product" means any product or service, including software,
+   hosted or online services, apps, plugins, or bundles, that incorporates the
+   Software or a Derivative Work, or that is substantially derived from it, and
+   that is sold, licensed, rented, or offered for a fee or subscription.
+
+   "Gross Revenue" means all amounts received by You from sales, licenses,
+   subscriptions, renewals, and in-product purchases of a Commercial Product,
+   less sales taxes, value-added taxes, and refunds actually paid. If a
+   Commercial Product is sold as part of a larger bundle, Gross Revenue is the
+   portion of the bundle price reasonably attributable to the Commercial
+   Product.
+
+2. Free Use
+
+   Subject to the conditions of this license, the Licensor grants You a
+   worldwide, royalty-free, non-exclusive license to use, copy, modify, and
+   distribute the Software and Derivative Works, at no charge, for any purpose
+   that does not involve a Commercial Product. This includes personal use,
+   education, research, non-profit use, and use within a business (such as
+   managing your own or your organization's accounts) where the Software or a
+   Derivative Work is not itself sold or offered for a fee.
+
+3. Attribution (applies to all use)
+
+   Any copy, distribution, or Derivative Work of the Software must:
+
+   a. keep this license and the copyright notice above, in full, with the
+      source code and with any distributed binaries; and
+
+   b. give clear, visible credit to the original author, for example in an
+      "About" screen, credits page, or README, in a form such as:
+      "Based on AlpacaTools by Defectuous (https://github.com/Defectuous/AlpacaTools)".
+
+   You may not remove or obscure this credit, and you may not claim or imply
+   that you are the original author of the Software.
+
+4. Commercial Use: 1% Royalty
+
+   You may create and distribute a Commercial Product only if You pay the
+   Licensor a royalty of one percent (1%) of all Gross Revenue from that
+   Commercial Product, under these terms:
+
+   a. Notice. Before the first sale or subscription, You notify the Licensor
+      through https://github.com/Defectuous (for example by opening an issue in
+      the AlpacaTools repository) that You intend to offer a Commercial
+      Product, and agree a payment method with the Licensor.
+
+   b. Payment. Royalties are calculated and paid each calendar quarter, within
+      thirty (30) days after the end of the quarter.
+
+   c. Reporting. Each payment is accompanied by a statement of Gross Revenue
+      for that quarter.
+
+   d. Records. You keep accurate records of Gross Revenue for at least three
+      (3) years and make them available to the Licensor, or to an independent
+      accountant it chooses, on reasonable request, no more than once a year.
+
+   e. Duration. The royalty applies for as long as the Commercial Product
+      incorporates or is derived from the Software.
+
+   The Licensor may agree different commercial terms in a separate written
+   agreement, which then takes precedence over this section.
+
+5. Termination
+
+   If You breach this license, and do not cure the breach within thirty (30)
+   days after written notice from the Licensor, Your rights under this license
+   end automatically. Royalties already due remain payable. Copies obtained
+   from You by others under this license keep their rights as long as those
+   recipients comply with it.
+
+6. Not Financial Advice
+
+   The Software displays brokerage account data and can be used in connection
+   with trading. Nothing in the Software is financial, investment, tax, or
+   legal advice. You are solely responsible for any trading decisions and for
+   any orders placed with or through the Software.
+
+7. No Warranty and Limitation of Liability
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, ACCURACY, AND NON-INFRINGEMENT. IN NO
+   EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY, INCLUDING TRADING LOSSES, LOST PROFITS, OR LOSS OF DATA, WHETHER
+   IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OF OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+8. Third-Party Services and Components
+
+   This license covers only the Software. It grants no rights to Alpaca or any
+   other broker's services, APIs, data, or trademarks, which are governed by
+   their own terms. Third-party libraries used by the Software remain under
+   their own licenses.
