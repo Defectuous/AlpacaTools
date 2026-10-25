@@ -64,6 +64,15 @@ on a position row), choose a condition, and add it:
 
 The list also shows each symbol's P/L where you hold it.
 
+**Stop-limit sell orders** are watched automatically, in every account (untick
+**Watch automatically** to turn it off). Each open stop-limit sell notifies once at
+each step: price within 1% of the stop, stop hit, price below the limit (the order
+may not fill and you may still hold the position), and filled, with the fill price
+and P/L against the position's average entry, before fees. Open orders are fetched
+once a minute per account, and at once when Alpaca pushes an order event. What was
+already notified is kept in `%APPDATA%\AlpacaTools\order-watch.json`, so a restart
+doesn't repeat it.
+
 Each alert fires once, as a Windows notification from the tray icon, then shows
 "Fired" until you **Re-arm** it. Clicking the notification opens the Alerts tab. Checks
 keep running while the window is minimized, using the keys of the account on screen.
@@ -109,6 +118,14 @@ keys a bot also uses. For that account the dashboard:
 - caps itself at 10 trading and 20 market-data requests a minute, refreshes account
   data every 2 minutes, and backs off once half the key's budget is used.
 
+## Download
+
+Grab `AlpacaDashboard-<version>-win-x64.zip` from
+[Releases](https://github.com/Defectuous/AlpacaTools/releases), unzip it and run
+`AlpacaDashboard.exe`. It's self-contained, so .NET doesn't need to be installed. The
+exe isn't code-signed, so Windows SmartScreen may warn on first run (**More info** →
+**Run anyway**).
+
 ## Run
 
 ```
@@ -127,6 +144,10 @@ dotnet publish src/AlpacaDashboard -c Release -r win-x64 --self-contained -p:Pub
 ```
 
 Output: `src/AlpacaDashboard/bin/Release/net10.0-windows/win-x64/publish/AlpacaDashboard.exe`.
+
+To cut a release, push a version tag (`git tag v0.2.0 && git push origin v0.2.0`). The
+[Release workflow](.github/workflows/release.yml) builds the exe and attaches it to a
+GitHub Release.
 
 ## Where things live
 
