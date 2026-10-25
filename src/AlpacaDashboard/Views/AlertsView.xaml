@@ -41,6 +41,65 @@
             </StackPanel>
         </Border>
 
+        <!-- Automatic alerts on stop-limit sell orders -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}" DataContext="{Binding StopOrders}">
+            <StackPanel>
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Right" Content="Watch automatically" IsChecked="{Binding IsEnabled}" Foreground="{StaticResource InkBrush}"
+                              VerticalAlignment="Center"
+                              ToolTip="Checks every account's open orders once a minute (and at once when Alpaca pushes an order event)" />
+                    <TextBlock Text="Stop-limit sell orders" Style="{StaticResource CardTitle}" />
+                </DockPanel>
+                <TextBlock Foreground="{StaticResource MutedBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                           Text="Every open stop-limit sell, in every account, notifies you once at each step: within 1% of the stop, stop hit, price below the limit (the order may not fill), and filled." />
+                <TextBlock Text="No open stop-limit sell orders." Foreground="{StaticResource MutedBrush}"
+                           Visibility="{Binding Orders.Count, Converter={StaticResource NotEmptyToVisibility}, ConverterParameter=Invert}" />
+                <DataGrid ItemsSource="{Binding Orders}" Style="{StaticResource DarkGrid}" MaxHeight="240"
+                          Visibility="{Binding Orders.Count, Converter={StaticResource NotEmptyToVisibility}}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Symbol" Binding="{Binding Symbol, Mode=OneWay}" Width="Auto" MinWidth="80" FontWeight="SemiBold" />
+                        <DataGridTextColumn Header="Account" Binding="{Binding AccountName, Mode=OneWay}" Width="Auto" Foreground="{StaticResource SecondaryBrush}" />
+                        <DataGridTextColumn Header="Qty" Binding="{Binding QtyText, Mode=OneWay}" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                        <DataGridTextColumn Header="Stop" Binding="{Binding StopText, Mode=OneWay}" SortMemberPath="Stop" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                        <DataGridTextColumn Header="Limit" Binding="{Binding LimitText, Mode=OneWay}" SortMemberPath="Limit" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                        <DataGridTextColumn Header="Price" Binding="{Binding PriceText, Mode=OneWay}" SortMemberPath="CurrentPrice" Width="Auto" ElementStyle="{StaticResource NumCell}" />
+                        <DataGridTextColumn Header="Above stop" Binding="{Binding ToStopText, Mode=OneWay}" Width="Auto"
+                                            ElementStyle="{StaticResource NumCell}" Foreground="{StaticResource SecondaryBrush}" />
+                        <DataGridTemplateColumn Header="Status" Width="*" SortMemberPath="Stage">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding StatusText}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource SecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Stage}" Value="NearStop">
+                                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Stage}" Value="StopHit">
+                                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Stage}" Value="BelowLimit">
+                                                        <Setter Property="Foreground" Value="{StaticResource BadBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Stage}" Value="Filled">
+                                                        <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+
         <!-- Alert list -->
         <Border Style="{StaticResource Card}">
             <DockPanel>

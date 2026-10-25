@@ -109,6 +109,7 @@ public sealed class AlpacaOrder
     [JsonPropertyName("qty")] public decimal? Qty { get; set; }
     [JsonPropertyName("notional")] public decimal? Notional { get; set; }
     [JsonPropertyName("filled_qty")] public decimal FilledQty { get; set; }
+    [JsonPropertyName("filled_avg_price")] public decimal? FilledAvgPrice { get; set; }
     [JsonPropertyName("limit_price")] public decimal? LimitPrice { get; set; }
     [JsonPropertyName("stop_price")] public decimal? StopPrice { get; set; }
     [JsonPropertyName("submitted_at")] public DateTimeOffset? SubmittedAt { get; set; }

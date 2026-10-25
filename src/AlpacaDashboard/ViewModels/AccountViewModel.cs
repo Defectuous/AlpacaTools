@@ -343,7 +343,14 @@ public sealed partial class AccountViewModel : ObservableObject, IDisposable
     // ----- Trade updates (push) -----
 
     private void OnTradeUpdate(string evt, string symbol) =>
-        Application.Current.Dispatcher.BeginInvoke(ScheduleEventRefresh);
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            ScheduleEventRefresh();
+            TradeEvent?.Invoke(this, evt, symbol);
+        });
+
+    /// <summary>An order event pushed by Alpaca (e.g. "fill"), on the UI thread; the stop-order watch checks fills at once.</summary>
+    public event Action<AccountViewModel, string, string>? TradeEvent;
 
     private void ScheduleEventRefresh()
     {

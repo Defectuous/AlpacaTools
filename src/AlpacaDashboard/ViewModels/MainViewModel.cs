@@ -110,8 +110,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         account.LivePriceApplied += OnLivePrice;
         account.AlertRequested += OnAlertRequested;
+        account.TradeEvent += OnTradeEvent;
         return account;
     }
+
+    private void OnTradeEvent(AccountViewModel account, string evt, string symbol) => Alerts.StopOrders.OnTradeEvent(account, evt, symbol);
 
     private void OnLivePrice(string symbol, double price) => Alerts.OnLivePrice(symbol, price);
 
@@ -178,6 +181,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Accounts.Remove(vm);
         vm.LivePriceApplied -= OnLivePrice;
         vm.AlertRequested -= OnAlertRequested;
+        vm.TradeEvent -= OnTradeEvent;
         vm.Dispose();
         try { LedgerStore.Default.DeleteAccount(vm.Profile.Id); }
         catch (Exception) { /* the ledger is a cache of Alpaca's history; a leftover copy does no harm */ }

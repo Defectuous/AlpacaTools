@@ -44,6 +44,11 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
         Search = new SymbolSearchViewModel(selected, PickSymbol) { PickHint = "Enter picks it for the alert" };
         foreach (var alert in AlertStore.Load()) Alerts.Add(new AlertRowViewModel(alert) { AccountName = AccountName(alert.AccountId) });
         _newCondition = Conditions[0];
+        StopOrders = new StopOrderWatchViewModel(accounts, notifier, () =>
+        {
+            if (!IsViewing) UnseenCount++;
+        });
+        StopOrders.Orders.CollectionChanged += (_, _) => UpdateNotifier();
         UpdateNotifier();
 
         _pollTimer = new DispatcherTimer { Interval = PollInterval };
@@ -53,6 +58,9 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<AlertRowViewModel> Alerts { get; } = [];
+
+    /// <summary>Automatic alerts on every open stop-limit sell order.</summary>
+    public StopOrderWatchViewModel StopOrders { get; }
 
     /// <summary>Symbol picker for a new alert.</summary>
     public SymbolSearchViewModel Search { get; }
@@ -276,8 +284,10 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
 
     private async Task PollAsync()
     {
-        if (_polling || Alerts.Count == 0) return;
-        if (!IsViewing && !Alerts.Any(a => a.IsArmed)) return; // nothing to watch: spend no requests
+        if (_polling) return;
+        var watchOrders = StopOrders.IsEnabled && _accounts().Count > 0;
+        if (Alerts.Count == 0 && !watchOrders) return;
+        if (!IsViewing && !Alerts.Any(a => a.IsArmed) && !watchOrders) return; // nothing to watch: spend no requests
         if (PricingAccount is not { } account)
         {
             Status = "Add an account: alerts use its API keys to check prices.";
@@ -288,9 +298,10 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
         _polling = true;
         try
         {
+            await StopOrders.RefreshAsync();
             await RefreshOffscreenHoldingsAsync();
-            var symbols = Alerts.Select(a => (a.Symbol, a.IsCrypto)).Distinct().ToList();
-            var quotes = await FetchQuotesAsync(account, symbols);
+            var symbols = Alerts.Select(a => (a.Symbol, a.IsCrypto)).Concat(StopOrders.Symbols).Distinct().ToList();
+            var quotes = symbols.Count > 0 ? await FetchQuotesAsync(account, symbols) : [];
             foreach (var (symbol, quote) in quotes)
             {
                 if (quote.PrevClose is { } prev) _prevClose[symbol] = prev;
@@ -340,6 +351,7 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
     private void Apply(string symbol, decimal price)
     {
         if (price <= 0) return;
+        StopOrders.OnPrice(symbol, price);
         foreach (var row in Alerts)
         {
             if (row.Symbol != symbol) continue;
@@ -453,8 +465,8 @@ public sealed partial class AlertsViewModel : ObservableObject, IDisposable
 
     private void UpdateNotifier()
     {
-        var armed = Alerts.Count(a => a.IsArmed);
-        _notifier.Visible = Alerts.Count > 0;
+        var armed = Alerts.Count(a => a.IsArmed) + StopOrders.Orders.Count(o => o.Stage != StopOrderStage.Filled);
+        _notifier.Visible = Alerts.Count > 0 || StopOrders.Orders.Count > 0;
         _notifier.Tooltip = armed == 1 ? "Alpaca Dashboard · 1 alert watching" : $"Alpaca Dashboard · {armed} alerts watching";
     }
 
