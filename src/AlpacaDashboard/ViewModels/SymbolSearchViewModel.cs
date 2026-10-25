@@ -39,6 +39,9 @@ public sealed partial class SymbolSearchViewModel : ObservableObject
         _pick = pick;
     }
 
+    /// <summary>What Enter does, for the dropdown's footer.</summary>
+    public string PickHint { get; init; } = "Enter opens its chart";
+
     [ObservableProperty] private string _query = "";
     [ObservableProperty] private bool _isOpen;
     [ObservableProperty] private SymbolSuggestion? _selected;

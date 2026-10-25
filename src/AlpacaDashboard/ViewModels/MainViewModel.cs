@@ -9,10 +9,12 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AlpacaDashboard.ViewModels;
 
-public enum MainTab { Portfolio, Screener }
+public enum MainTab { Portfolio, Screener, Alerts }
 
-public sealed partial class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
+    private readonly AlertNotifier _notifier = new();
+
     // Each account decides what is actually due (see AccountViewModel's cadence); this is just the heartbeat.
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
     private readonly DispatcherTimer _timer;
@@ -24,13 +26,20 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             foreach (var profile in AccountStore.Load())
-                Accounts.Add(new AccountViewModel(profile));
+                Accounts.Add(Track(new AccountViewModel(profile)));
         }
         catch (Exception ex)
         {
             MessageBox.Show($"Could not load saved accounts:\n{ex.Message}", "Alpaca Dashboard",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+
+        Alerts = new AlertsViewModel(() => SelectedAccount, () => Accounts, _notifier);
+        Alerts.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AlertsViewModel.TabLabel)) OnPropertyChanged(nameof(AlertsTabLabel));
+        };
+        _notifier.Clicked += ShowAlerts;
 
         SelectedAccount = Accounts.FirstOrDefault();
 
@@ -64,17 +73,52 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Which view the main area shows for the selected account; kept when switching accounts.</summary>
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPortfolioTab), nameof(IsScreenerTab))]
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(IsPortfolioTab), nameof(IsScreenerTab), nameof(IsAlertsTab))]
     private MainTab _selectedTab = MainTab.Portfolio;
 
     public bool IsPortfolioTab => SelectedTab == MainTab.Portfolio;
     public bool IsScreenerTab => SelectedTab == MainTab.Screener;
+    public bool IsAlertsTab => SelectedTab == MainTab.Alerts;
 
     [RelayCommand]
     private void SetTab(MainTab tab)
     {
         SelectedTab = tab;
+        Alerts.IsViewing = tab == MainTab.Alerts;
         if (tab == MainTab.Screener) SelectedAccount?.Screener.EnsureLoaded();
+    }
+
+    /// <summary>Price alerts on any symbol; shared by every account.</summary>
+    public AlertsViewModel Alerts { get; }
+
+    /// <summary>"Alerts", or "Alerts (2)" when some fired unseen.</summary>
+    public string AlertsTabLabel => Alerts.TabLabel;
+
+    /// <summary>A notification was clicked: bring the window back and show the Alerts tab.</summary>
+    private void ShowAlerts()
+    {
+        if (Application.Current.MainWindow is { } window)
+        {
+            if (window.WindowState == WindowState.Minimized) SystemCommands.RestoreWindow(window); // back to maximized if it was
+            window.Activate();
+        }
+        SetTab(MainTab.Alerts);
+    }
+
+    /// <summary>Hooks an account's live prices and Alert buttons up to the Alerts tab.</summary>
+    private AccountViewModel Track(AccountViewModel account)
+    {
+        account.LivePriceApplied += OnLivePrice;
+        account.AlertRequested += OnAlertRequested;
+        return account;
+    }
+
+    private void OnLivePrice(string symbol, double price) => Alerts.OnLivePrice(symbol, price);
+
+    private void OnAlertRequested(PositionRowViewModel row)
+    {
+        Alerts.Prefill(row.DataSymbol, row.IsCrypto, row.CurrentPrice);
+        SetTab(MainTab.Alerts);
     }
 
     /// <summary>Symbol search in the tab strip, over every tradable stock and crypto pair.</summary>
@@ -87,7 +131,8 @@ public sealed partial class MainViewModel : ObservableObject
     public void ShowSymbol(string symbol, bool isCrypto)
     {
         if (SelectedAccount is not { } account) return;
-        if (SelectedTab == MainTab.Screener) account.Screener.ShowSymbolChart(symbol, isCrypto);
+        if (SelectedTab == MainTab.Alerts) Alerts.Prefill(symbol, isCrypto, null); // the Alerts tab has no chart: start an alert
+        else if (SelectedTab == MainTab.Screener) account.Screener.ShowSymbolChart(symbol, isCrypto);
         else account.ShowSymbolChart(symbol, isCrypto);
     }
 
@@ -105,7 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
         var editor = new AccountEditorWindow(new AccountProfile()) { Owner = Application.Current.MainWindow };
         if (editor.ShowDialog() != true) return;
 
-        var vm = new AccountViewModel(editor.Result);
+        var vm = Track(new AccountViewModel(editor.Result));
         Accounts.Add(vm);
         Save();
         SelectedAccount = vm;
@@ -131,6 +176,8 @@ public sealed partial class MainViewModel : ObservableObject
         if (confirm != MessageBoxResult.Yes) return;
 
         Accounts.Remove(vm);
+        vm.LivePriceApplied -= OnLivePrice;
+        vm.AlertRequested -= OnAlertRequested;
         vm.Dispose();
         try { LedgerStore.Default.DeleteAccount(vm.Profile.Id); }
         catch (Exception) { /* the ledger is a cache of Alpaca's history; a leftover copy does no harm */ }
@@ -139,4 +186,10 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private void Save() => AccountStore.Save(Accounts.Select(a => a.Profile));
+
+    public void Dispose()
+    {
+        Alerts.Dispose();
+        _notifier.Dispose();
+    }
 }

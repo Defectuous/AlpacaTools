@@ -56,6 +56,9 @@ public sealed partial class AccountViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _pricePollTimer;
     private readonly DispatcherTimer _eventRefreshTimer;
     private bool _isActive;
+
+    /// <summary>True for the account on screen, whose positions and prices are kept current.</summary>
+    public bool IsActive => _isActive;
     private MarketDataPlan? _detectedPlan;
     // Alpaca refused the SIP stream (e.g. the subscription lapsed): Basic limits apply until the profile changes,
     // even when the plan is set manually, so refreshes don't keep flipping back to SIP.
@@ -391,6 +394,15 @@ public sealed partial class AccountViewModel : ObservableObject, IDisposable
     {
         if (row is null) return;
         OpenTradeWindow(row, TradeMode.SellQty);
+    }
+
+    /// <summary>A position row's Alert button: the Alerts tab starts a new alert for it.</summary>
+    public event Action<PositionRowViewModel>? AlertRequested;
+
+    [RelayCommand]
+    private void OpenAlert(PositionRowViewModel? row)
+    {
+        if (row is { HasMarketData: true }) AlertRequested?.Invoke(row);
     }
 
     public void OpenTradeWindow(PositionRowViewModel row, TradeMode mode) =>
@@ -740,10 +752,14 @@ public sealed partial class AccountViewModel : ObservableObject, IDisposable
             {
                 row.CurrentPrice = (decimal)price;
                 row.IsLive = true;
+                LivePriceApplied?.Invoke(row.DataSymbol, price);
             }
         }
         RecalculateTotals();
     }
+
+    /// <summary>A streamed (or bot-priority polled) price reached a position row; price alerts check it at once.</summary>
+    public event Action<string, double>? LivePriceApplied;
 
     private void RecalculateTotals()
     {

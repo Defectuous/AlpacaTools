@@ -99,10 +99,14 @@
                             Tag="{Binding IsPortfolioTab}" />
                     <Button Content="Screener" Style="{StaticResource RangeButton}" Command="{Binding SetTabCommand}" CommandParameter="{x:Static vm:MainTab.Screener}"
                             Tag="{Binding IsScreenerTab}" />
+                    <Button Content="{Binding AlertsTabLabel}" Style="{StaticResource RangeButton}" Command="{Binding SetTabCommand}" CommandParameter="{x:Static vm:MainTab.Alerts}"
+                            Tag="{Binding IsAlertsTab}" ToolTip="Price alerts on any stock or crypto pair, shown as Windows notifications" />
                 </StackPanel>
             </Border>
         </DockPanel>
         <Grid>
+        <views:AlertsView DataContext="{Binding Alerts}" Margin="18,10,18,18"
+                          Visibility="{Binding DataContext.IsAlertsTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource NotEmptyToVisibility}}" />
         <views:ScreenerView DataContext="{Binding SelectedAccount.Screener}" Margin="18,10,18,18"
                             Visibility="{Binding DataContext.IsScreenerTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource NotEmptyToVisibility}}" />
         <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedAccount}"
@@ -401,6 +405,10 @@
                                                     <Button Content="Trade" Style="{StaticResource GhostButton}" Padding="8,1" FontSize="11" Margin="6,0,0,0"
                                                             ToolTip="Liquidate, sell an amount, or set a stop limit"
                                                             Command="{Binding DataContext.OpenTradeCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                            CommandParameter="{Binding}" />
+                                                    <Button Content="Alert" Style="{StaticResource GhostButton}" Padding="8,1" FontSize="11" Margin="6,0,0,0"
+                                                            ToolTip="Get a Windows notification when this price moves"
+                                                            Command="{Binding DataContext.OpenAlertCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                             CommandParameter="{Binding}" />
                                                 </StackPanel>
                                             </DataTemplate>

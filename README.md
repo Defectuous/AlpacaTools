@@ -49,6 +49,27 @@ feed the same ledger later.
   reset), its ledger is cleared and downloaded again. Removing an account removes its
   ledger.
 
+## Price alerts
+
+The **Alerts** tab watches any stock or crypto pair. Pick a symbol (or press **Alert**
+on a position row), choose a condition, and add it:
+
+- price at or above / at or below a value
+- up / down by at least a percentage today (against the previous close)
+- a position's unrealized P/L: profit or loss of at least $X, or gain or loss of at
+  least X% of cost basis. These follow the position in the account on screen when the
+  alert is made, even after switching accounts (an account not on screen costs one
+  positions request per check while it has such an alert). They don't fire while the
+  symbol isn't held
+
+The list also shows each symbol's P/L where you hold it.
+
+Each alert fires once, as a Windows notification from the tray icon, then shows
+"Fired" until you **Re-arm** it. Clicking the notification opens the Alerts tab. Checks
+keep running while the window is minimized, using the keys of the account on screen.
+On the Basic plan stock prices are IEX real-time. Alerts are saved to
+`%APPDATA%\AlpacaTools\alerts.json`.
+
 ## Going easy on the API
 
 Alpaca's limits are per API key and shared with anything else using that key, such as
@@ -64,7 +85,8 @@ trading bots or screeners. The dashboard keeps its share small:
 | Ledger history download | Once per account, one page every 3s (15s with bot priority); afterwards free |
 | Price-chart windows | Cached per range for 5 min; Refresh forces a reload |
 | Symbol search list (all stocks + crypto) | Two requests the first time you search, cached 6 hours per account; typing costs nothing |
-| While minimized | Nothing; catches up when restored |
+| Price alerts | Every 30s, one request for all stock alerts and one for crypto; only while an alert is watching. Streamed positions are checked instantly |
+| While minimized | Nothing but price alerts; the rest catches up when restored |
 
 Every request also goes through a per-key budget (`Services/ApiBudget.cs`). The
 dashboard caps itself at 40 trading and 60 market-data requests a minute. It reads
@@ -116,6 +138,8 @@ Output: `src/AlpacaDashboard/bin/Release/net10.0-windows/win-x64/publish/AlpacaD
 | `Services/MarketDataStream.cs` | Websocket price stream (IEX, SIP or crypto) with reconnect/backoff |
 | `Services/TradeUpdatesStream.cs` | Order-event stream that triggers refreshes instead of polling |
 | `Services/ApiBudget.cs` | Per-key request cap, rate-limit header tracking, 429 back-off |
+| `ViewModels/AlertsViewModel.cs` | Price alerts: checking, firing, the Alerts tab |
+| `Services/AlertNotifier.cs` | Tray icon and Windows notifications for alerts |
 | `Services/FeeEstimator.cs` | Estimated fees to close a position (rates from Alpaca's fee schedule) |
 | `ViewModels/SymbolChartViewModel.cs` | Candlestick + volume chart window |
 | `ViewModels/SymbolSearchViewModel.cs` + `Views/SymbolSearchBox.xaml` | Type-ahead symbol search in the tab strip (Ctrl+F) |

@@ -25,7 +25,11 @@ public partial class MainWindow : Window
             if (startupCommand is not null && await _controller.RunAsync(startupCommand) is { } error)
                 MessageBox.Show(this, error, "Alpaca Dashboard", MessageBoxButton.OK, MessageBoxImage.Information);
         };
-        Closed += (_, _) => _controller?.Dispose();
+        Closed += (_, _) =>
+        {
+            _controller?.Dispose();
+            (DataContext as MainViewModel)?.Dispose(); // removes the alerts tray icon
+        };
     }
 
     /// <summary>Focuses the symbol search, optionally with text already typed.</summary>

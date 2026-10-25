@@ -67,7 +67,7 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBlock Text="↑↓ to choose · Enter opens its chart · Esc closes" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="8,4,8,2"
+                    <TextBlock Text="{Binding PickHint, StringFormat='↑↓ to choose · {0} · Esc closes'}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="8,4,8,2"
                                Visibility="{Binding Suggestions.Count, Converter={StaticResource NotEmptyToVisibility}}" />
                 </StackPanel>
             </Border>
