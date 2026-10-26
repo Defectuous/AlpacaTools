@@ -9,6 +9,7 @@ namespace AlpacaDashboard.ViewModels;
 public static class Palette
 {
     public static readonly SKColor Surface = SKColor.Parse("#1a1a19");
+    public static readonly SKColor Ink = SKColor.Parse("#ffffff");
     public static readonly SKColor Grid = SKColor.Parse("#2c2c2a");
     public static readonly SKColor Muted = SKColor.Parse("#898781");
     public static readonly SKColor Secondary = SKColor.Parse("#c3c2b7");

@@ -3,7 +3,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:AlpacaDashboard.ViewModels"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
-             x:Name="Root">
+             x:Name="Root" PreviewKeyDown="Root_PreviewKeyDown">
+    <UserControl.Resources>
+        <!-- Toolbar toggles above the chart; accent while on -->
+        <Style x:Key="ChartToggle" TargetType="ToggleButton">
+            <Setter Property="Template" Value="{StaticResource FlatButtonTemplate}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSelectedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,4" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -54,6 +73,49 @@
                             Tag="{Binding SelectedRange, Converter={StaticResource EnumEquals}, ConverterParameter=FiveYears}" />
                 </StackPanel>
             </Border>
+            <!-- Overlays dropdown: tick any number; it stays open until you click elsewhere -->
+            <ToggleButton x:Name="OverlaysToggle" DockPanel.Dock="Right" Content="{Binding OverlaysLabel}"
+                          ToolTip="Trendlines, support/resistance, moving averages, Bollinger Bands, VWAP">
+                <ToggleButton.Style>
+                    <Style TargetType="ToggleButton" BasedOn="{StaticResource ChartToggle}">
+                        <Style.Triggers>
+                            <!-- While open, a click on the button only closes the popup (instead of closing and reopening it) -->
+                            <DataTrigger Binding="{Binding IsOpen, ElementName=OverlaysPopup}" Value="True">
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ToggleButton.Style>
+            </ToggleButton>
+            <Popup x:Name="OverlaysPopup" PlacementTarget="{Binding ElementName=OverlaysToggle}" Placement="Bottom" StaysOpen="False"
+                   AllowsTransparency="True" IsOpen="{Binding IsChecked, ElementName=OverlaysToggle, Mode=TwoWay}">
+                <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                        CornerRadius="6" Padding="12,8" Margin="0,4,0,0" MinWidth="220">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding Overlays}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsChecked}" IsEnabled="{Binding IsAvailable}" Foreground="{StaticResource InkBrush}"
+                                              Margin="0,4" ToolTip="{Binding Hint}" ToolTipService.ShowOnDisabled="True" Cursor="Hand">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Line X1="0" X2="16" Y1="0" Y2="0" Stroke="{Binding Swatch}" StrokeThickness="2"
+                                                  StrokeDashArray="{Binding DashArray}" VerticalAlignment="Center" Margin="4,0,8,0" />
+                                            <TextBlock Text="{Binding Name}" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="Averages count bars of the selected range (days on 3M and 1Y, hours on 1M)."
+                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" MaxWidth="220" Margin="0,6,0,0" />
+                        <Button Content="{Binding ClearLinesLabel}" Command="{Binding ClearLinesCommand}" Style="{StaticResource GhostButton}"
+                                Padding="10,4" Margin="0,10,0,2" HorizontalAlignment="Left" ToolTip="Remove the lines you drew on this symbol"
+                                Visibility="{Binding HasLines, Converter={StaticResource NotEmptyToVisibility}}" />
+                    </StackPanel>
+                </Border>
+            </Popup>
+            <ToggleButton DockPanel.Dock="Right" Content="✎ Draw" IsChecked="{Binding IsDrawing}" Style="{StaticResource ChartToggle}"
+                          ToolTip="Draw a trendline: click two points on the chart. Right-click a line to delete it." />
             <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="{Binding RangeChangePct, Converter={StaticResource SignBrush}}">
                 <Run Text="{Binding RangeChangePct, Converter={StaticResource Signed}, ConverterParameter=P, Mode=OneWay}" />
                 <Run Text="over selected range" Foreground="{StaticResource MutedBrush}" FontSize="12" />
@@ -63,12 +125,59 @@
         </DockPanel>
 
         <!-- Charts stay hidden until there are bars, so no placeholder 0–10 axes show -->
-        <lvc:CartesianChart Grid.Row="2" Series="{Binding PriceSeries}" XAxes="{Binding PriceXAxes}" YAxes="{Binding PriceYAxes}"
-                            LegendPosition="Hidden" TooltipPosition="Top" ZoomMode="X" Background="Transparent"
-                            Visibility="{Binding HasData, Converter={StaticResource NotEmptyToVisibility}}" />
+        <lvc:CartesianChart x:Name="PriceChart" Grid.Row="2" Series="{Binding PriceSeries}" XAxes="{Binding PriceXAxes}" YAxes="{Binding PriceYAxes}"
+                            Sections="{Binding PriceSections}" LegendPosition="Hidden" TooltipPosition="Top" ZoomMode="{Binding ChartZoom}"
+                            Background="Transparent" Visibility="{Binding HasData, Converter={StaticResource NotEmptyToVisibility}}"
+                            PreviewMouseLeftButtonDown="PriceChart_PreviewMouseLeftButtonDown" PreviewMouseMove="PriceChart_PreviewMouseMove"
+                            PreviewMouseRightButtonUp="PriceChart_PreviewMouseRightButtonUp">
+            <lvc:CartesianChart.Style>
+                <Style TargetType="lvc:CartesianChart">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDrawing}" Value="True">
+                            <Setter Property="Cursor" Value="Cross" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </lvc:CartesianChart.Style>
+        </lvc:CartesianChart>
         <lvc:CartesianChart Grid.Row="3" Series="{Binding VolumeSeries}" XAxes="{Binding VolumeXAxes}" YAxes="{Binding VolumeYAxes}"
                             LegendPosition="Hidden" TooltipPosition="Top" Background="Transparent" Margin="0,4,0,0"
                             Visibility="{Binding HasData, Converter={StaticResource NotEmptyToVisibility}}" />
+
+        <!-- Legend for the overlays on screen (top-left of the price chart) -->
+        <Border Grid.Row="2" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6,4,0,0" Padding="8,4" CornerRadius="4"
+                Background="#CC1a1a19" IsHitTestVisible="False">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasData}" Value="False">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Legend.Count}" Value="0">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <ItemsControl ItemsSource="{Binding Legend}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                            <Line X1="0" X2="14" Y1="0" Y2="0" Stroke="{Binding Swatch}" StrokeThickness="2"
+                                  StrokeDashArray="{Binding DashArray}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding Text}" FontSize="11" Foreground="{StaticResource SecondaryBrush}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- While drawing: the next step (top-center of the price chart) -->
+        <Border Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,4,0,0" Padding="10,4" CornerRadius="4"
+                Background="#E6242422" IsHitTestVisible="False"
+                Visibility="{Binding DrawHint, Converter={StaticResource NotEmptyToVisibility}}">
+            <TextBlock Text="{Binding DrawHint}" FontSize="12" Foreground="{StaticResource InkBrush}" />
+        </Border>
 
         <!-- Until the first bars arrive: what it's waiting on -->
         <TextBlock Grid.Row="2" Text="{Binding LoadingMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
