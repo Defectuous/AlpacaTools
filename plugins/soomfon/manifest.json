@@ -1,0 +1,50 @@
+{
+  "Actions": [
+    {
+      "UUID": "com.alpacatools.dashboard.account",
+      "Icon": "images/account@2x.png",
+      "Name": "Account",
+      "Tooltip": "Shows an account's equity and day change. Press to switch the dashboard to it.",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key@2x.png", "TitleAlignment": "bottom", "FontSize": "12" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "Controllers": ["Keypad"]
+    },
+    {
+      "UUID": "com.alpacatools.dashboard.symbol",
+      "Icon": "images/symbol@2x.png",
+      "Name": "Symbol",
+      "Tooltip": "Shows a stock or crypto price and day change. Press to open its chart (or Buy/Sell).",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key@2x.png", "TitleAlignment": "bottom", "FontSize": "12" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "Controllers": ["Keypad"]
+    },
+    {
+      "UUID": "com.alpacatools.dashboard.command",
+      "Icon": "images/command@2x.png",
+      "Name": "Command",
+      "Tooltip": "Runs a dashboard command: next account, tab, chart range, refresh, search…",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key@2x.png", "TitleAlignment": "bottom", "FontSize": "12" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": true,
+      "Controllers": ["Keypad"]
+    }
+  ],
+  "Version": "1.0.0",
+  "Name": "Alpaca Dashboard",
+  "Icon": "images/plugin@2x.png",
+  "CategoryIcon": "images/category@2x.png",
+  "Category": "Alpaca Dashboard",
+  "Description": "Live account totals and prices from Alpaca Dashboard on your keys, plus buttons to drive it. Orders still need your confirmation in the dashboard.",
+  "CodePath": "plugin.html",
+  "SDKVersion": 1,
+  "Author": "Defectuous",
+  "URL": "https://github.com/Defectuous/AlpacaTools",
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ]
+}

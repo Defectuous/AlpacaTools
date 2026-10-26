@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Alpaca Dashboard key settings</title>
+<style>
+  body { margin: 0; padding: 10px 12px; background: #2d2d2d; color: #e6e6e6; font: 13px "Segoe UI", sans-serif; }
+  .row { display: flex; align-items: center; margin: 0 0 8px; }
+  .row label { width: 90px; flex: none; color: #b5b5b5; }
+  .row input, .row select { flex: 1; min-width: 0; background: #3d3d3d; color: #e6e6e6; border: 1px solid #555; border-radius: 3px; padding: 4px 6px; font: inherit; }
+  .note { color: #9a9a9a; font-size: 12px; margin: 2px 0 8px 90px; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="account" class="hidden">
+  <div class="row"><label for="accountSelect">Account</label><select id="accountSelect"></select></div>
+  <div class="note" id="accountNote"></div>
+</div>
+
+<div id="symbol" class="hidden">
+  <div class="row"><label for="symbolInput">Symbol</label><input id="symbolInput" placeholder="SPY or BTC/USD" /></div>
+  <div class="row"><label for="pressSelect">On press</label>
+    <select id="pressSelect">
+      <option value="chart">Open chart</option>
+      <option value="buy">Open Buy window</option>
+      <option value="sell">Open Sell window (if held)</option>
+      <option value="none">Nothing</option>
+    </select>
+  </div>
+  <div class="note">Buy and Sell only open the window. You still confirm the order in the dashboard.</div>
+</div>
+
+<div id="command" class="hidden">
+  <div class="row"><label for="commandSelect">Command</label>
+    <select id="commandSelect">
+      <option value="toggle">Show / hide dashboard</option>
+      <option value="show">Show dashboard</option>
+      <option value="account.next">Next account</option>
+      <option value="account.prev">Previous account</option>
+      <option value="account">Switch to account…</option>
+      <option value="tab">Switch tab…</option>
+      <option value="range">Chart range…</option>
+      <option value="refresh">Refresh</option>
+      <option value="search">Symbol search</option>
+      <option value="chart">Open chart…</option>
+      <option value="buy">Buy…</option>
+      <option value="sell">Sell…</option>
+      <option value="close">Close position…</option>
+    </select>
+  </div>
+  <div class="row" id="argRow"><label for="argInput" id="argLabel">Value</label><input id="argInput" /></div>
+  <div class="note" id="argNote"></div>
+  <div class="row"><label for="labelInput">Key label</label><input id="labelInput" placeholder="(automatic)" /></div>
+</div>
+
+<script>
+const ARGS = {
+  account: { label: 'Account', note: 'Name or sidebar number, e.g. 2' },
+  tab: { label: 'Tab', note: 'portfolio or screener' },
+  range: { label: 'Range', note: '1D, 1W, 1M, 3M, 1Y or All' },
+  search: { label: 'Text', note: 'Optional: starts the search with this text' },
+  chart: { label: 'Symbol', note: 'e.g. SPY or BTC/USD' },
+  buy: { label: 'Symbol', note: 'e.g. SPY or BTC/USD' },
+  sell: { label: 'Symbol', note: 'Must be held in the account on screen' },
+  close: { label: 'Symbol', note: 'Must be held in the account on screen' },
+};
+
+let ws, uuid, action, settings = {};
+
+function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, info, actionInfo) {
+  uuid = inUUID;
+  const parsed = JSON.parse(actionInfo);
+  action = parsed.action;
+  settings = parsed.payload?.settings || {};
+  ws = new WebSocket('ws://127.0.0.1:' + port);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ event: registerEvent, uuid }));
+    ws.send(JSON.stringify({ event: 'sendToPlugin', action, context: uuid, payload: { request: 'accounts' } }));
+  };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.event === 'sendToPropertyInspector') fillAccounts(m.payload);
+    if (m.event === 'didReceiveSettings') { settings = m.payload?.settings || {}; load(); }
+  };
+  show();
+  load();
+}
+
+function save() {
+  ws.send(JSON.stringify({ event: 'setSettings', context: uuid, payload: settings }));
+}
+
+function show() {
+  const type = action.split('.').pop();
+  for (const id of ['account', 'symbol', 'command']) document.getElementById(id).classList.toggle('hidden', id !== type);
+}
+
+function load() {
+  document.getElementById('symbolInput').value = settings.symbol || '';
+  document.getElementById('pressSelect').value = settings.press || 'chart';
+  document.getElementById('commandSelect').value = settings.command || 'toggle';
+  document.getElementById('argInput').value = settings.arg || '';
+  document.getElementById('labelInput').value = settings.label || '';
+  updateArg();
+}
+
+function updateArg() {
+  const arg = ARGS[document.getElementById('commandSelect').value];
+  document.getElementById('argRow').classList.toggle('hidden', !arg);
+  document.getElementById('argNote').classList.toggle('hidden', !arg);
+  if (arg) {
+    document.getElementById('argLabel').textContent = arg.label;
+    document.getElementById('argNote').textContent = arg.note;
+  }
+}
+
+/** Accounts come from the plugin, which already talks to the dashboard. */
+function fillAccounts(payload) {
+  const select = document.getElementById('accountSelect');
+  const accounts = payload?.accounts || [];
+  select.innerHTML = '';
+  const placeholder = new Option(accounts.length ? 'Choose an account' : 'No accounts listed', '');
+  select.add(placeholder);
+  for (const a of accounts) select.add(new Option(`${a.number}. ${a.name} (${a.mode})`, a.id));
+  // Keep a saved choice even if the dashboard isn't running right now.
+  if (settings.account && !accounts.some(a => a.id === settings.account)) select.add(new Option('Saved account', settings.account));
+  select.value = settings.account || '';
+  document.getElementById('accountNote').textContent = payload?.status === 'ok'
+    ? 'Press the key to switch the dashboard to this account.'
+    : 'Start Alpaca Dashboard (and approve the connection) to list your accounts.';
+}
+
+document.getElementById('accountSelect').onchange = e => { settings.account = e.target.value; save(); };
+document.getElementById('symbolInput').onchange = e => { settings.symbol = e.target.value.trim().toUpperCase(); e.target.value = settings.symbol; save(); };
+document.getElementById('pressSelect').onchange = e => { settings.press = e.target.value; save(); };
+document.getElementById('commandSelect').onchange = e => { settings.command = e.target.value; updateArg(); save(); };
+document.getElementById('argInput').onchange = e => { settings.arg = e.target.value.trim(); save(); };
+document.getElementById('labelInput').onchange = e => { settings.label = e.target.value.trim(); save(); };
+</script>
+</body>
+</html>

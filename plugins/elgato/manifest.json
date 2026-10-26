@@ -1,0 +1,52 @@
+{
+  "UUID": "com.alpacatools.dashboard",
+  "Name": "Alpaca Dashboard",
+  "Version": "1.0.0.0",
+  "Author": "Defectuous",
+  "Description": "Live account totals and prices from Alpaca Dashboard on your keys, plus buttons to drive it. Orders still need your confirmation in the dashboard.",
+  "URL": "https://github.com/Defectuous/AlpacaTools",
+  "Icon": "images/plugin",
+  "Category": "Alpaca Dashboard",
+  "CategoryIcon": "images/category",
+  "CodePath": "plugin.html",
+  "SDKVersion": 2,
+  "Software": { "MinimumVersion": "6.4" },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.alpacatools.dashboard.account",
+      "Name": "Account",
+      "Icon": "images/account",
+      "Tooltip": "Shows an account's equity and day change. Press to switch the dashboard to it.",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "Controllers": ["Keypad"]
+    },
+    {
+      "UUID": "com.alpacatools.dashboard.symbol",
+      "Name": "Symbol",
+      "Icon": "images/symbol",
+      "Tooltip": "Shows a stock or crypto price and day change. Press to open its chart (or Buy/Sell).",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": false,
+      "Controllers": ["Keypad"]
+    },
+    {
+      "UUID": "com.alpacatools.dashboard.command",
+      "Name": "Command",
+      "Icon": "images/command",
+      "Tooltip": "Runs a dashboard command: next account, tab, chart range, refresh, search…",
+      "PropertyInspectorPath": "inspector.html",
+      "States": [{ "Image": "images/key" }],
+      "UserTitleEnabled": false,
+      "SupportedInMultiActions": true,
+      "Controllers": ["Keypad"]
+    }
+  ]
+}

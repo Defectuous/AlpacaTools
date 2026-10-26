@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Alpaca Dashboard plugin</title>
+<!-- Written by install.ps1 for each app: CLIENT_NAME, the name the dashboard's pairing dialog shows -->
+<script src="target.js"></script>
+<script>
+// Runs inside SOOMFON Stream Controller or Elgato Stream Deck (both speak the Stream Deck plugin protocol).
+// Reads the dashboard's local API (Services/ControllerServer.cs) and draws each key; key presses become
+// dashboard commands.
+
+const CLIENT = typeof CLIENT_NAME === 'string' ? CLIENT_NAME : 'Stream controller';
+const DEFAULT_PORT = 47823;
+const POLL_MS = 2000;
+const KEY_SIZE = 144;
+const COLORS = {
+  bg: '#1a1a19', ink: '#ffffff', secondary: '#c3c2b7', muted: '#898781',
+  up: '#0ca30c', down: '#e66767', accent: '#3987e5', warn: '#fab219',
+};
+const ACTION = {
+  account: 'com.alpacatools.dashboard.account',
+  symbol: 'com.alpacatools.dashboard.symbol',
+  command: 'com.alpacatools.dashboard.command',
+};
+// Default key labels for commands (the property inspector lists the same actions).
+const COMMAND_LABELS = {
+  show: 'Show', toggle: 'Show / hide', 'account.next': 'Next account', 'account.prev': 'Prev account',
+  account: 'Account', tab: 'Tab', range: 'Range', refresh: 'Refresh', search: 'Search',
+  chart: 'Chart', buy: 'Buy', sell: 'Sell', close: 'Close position',
+};
+
+let ws = null;
+let pluginUUID = null;
+const keys = new Map(); // context -> { action, settings, image, message, messageUntil }
+let globalSettings = {};
+let state = null;
+// ok | connecting | offline | pairing | unpaired | declined | error
+let status = 'connecting';
+let inflight = false;
+let pairing = false;
+
+// ----- Stream Controller connection -----
+
+function connectElgatoStreamDeckSocket(port, uuid, registerEvent, info) {
+  pluginUUID = uuid;
+  ws = new WebSocket('ws://127.0.0.1:' + port);
+  ws.onopen = () => {
+    send({ event: registerEvent, uuid });
+    send({ event: 'getGlobalSettings', context: uuid });
+  };
+  ws.onmessage = e => onEvent(JSON.parse(e.data));
+  setInterval(poll, POLL_MS);
+}
+
+function send(message) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+}
+
+function onEvent(m) {
+  const key = keys.get(m.context);
+  switch (m.event) {
+    case 'didReceiveGlobalSettings':
+      globalSettings = m.payload?.settings || {};
+      poll();
+      break;
+    case 'willAppear':
+      keys.set(m.context, { action: m.action, settings: m.payload?.settings || {}, image: null });
+      render(m.context);
+      poll();
+      break;
+    case 'willDisappear':
+      keys.delete(m.context);
+      break;
+    case 'didReceiveSettings':
+      if (key) {
+        key.settings = m.payload?.settings || {};
+        render(m.context);
+        poll();
+      }
+      break;
+    case 'keyDown':
+      press(m.context);
+      break;
+    case 'propertyInspectorDidAppear':
+    case 'sendToPlugin':
+      sendAccounts(m.context, m.action);
+      break;
+  }
+}
+
+/** The inspector's account dropdown comes from here, so it needs no token of its own. */
+function sendAccounts(context, action) {
+  send({
+    event: 'sendToPropertyInspector', action, context,
+    payload: { status, accounts: (state?.accounts || []).map(a => ({ id: a.id, number: a.number, name: a.name, mode: a.mode })) },
+  });
+}
+
+// ----- Token (pairing asks the user in the dashboard) -----
+
+function token() {
+  if (globalSettings.token) return globalSettings.token;
+  try { return localStorage.getItem('token'); } catch { return null; }
+}
+
+function setToken(value) {
+  globalSettings = { ...globalSettings, token: value || undefined };
+  send({ event: 'setGlobalSettings', context: pluginUUID, payload: globalSettings });
+  try { value ? localStorage.setItem('token', value) : localStorage.removeItem('token'); } catch { }
+}
+
+function base() {
+  return 'http://localhost:' + (Number(globalSettings.port) || DEFAULT_PORT);
+}
+
+async function pair() {
+  if (pairing) return;
+  pairing = true;
+  status = 'pairing';
+  renderAll();
+  try {
+    const r = await fetch(base() + '/v1/pair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client: CLIENT }),
+    });
+    if (r.ok) {
+      setToken((await r.json()).token);
+      status = 'connecting';
+    } else {
+      // 403: declined, so wait for a key press before asking again. 429: a dialog is already up.
+      status = r.status === 403 ? 'declined' : 'pairing';
+    }
+  } catch {
+    status = 'offline';
+  } finally {
+    pairing = false;
+    renderAll();
+  }
+  if (token()) poll();
+}
+
+// ----- State -----
+
+async function poll() {
+  if (inflight || keys.size === 0) return;
+  if (!token()) {
+    if (status !== 'declined') pair();
+    return;
+  }
+  inflight = true;
+  try {
+    const symbols = [...new Set([...keys.values()]
+      .filter(k => k.action === ACTION.symbol && k.settings.symbol)
+      .map(k => normalize(k.settings.symbol)))];
+    const r = await fetch(base() + '/v1/state?symbols=' + encodeURIComponent(symbols.join(',')), {
+      headers: { Authorization: 'Bearer ' + token() },
+    });
+    if (r.status === 401) {
+      setToken(null);
+      status = 'unpaired';
+    } else if (r.ok) {
+      state = await r.json();
+      status = 'ok';
+    } else {
+      status = 'error';
+    }
+  } catch {
+    state = null;
+    status = 'offline';
+  } finally {
+    inflight = false;
+    renderAll();
+  }
+}
+
+async function press(context) {
+  const key = keys.get(context);
+  if (!key) return;
+  if (status === 'declined' || status === 'unpaired' || !token()) {
+    status = 'unpaired';
+    pair();
+    return;
+  }
+  if (status === 'offline') {
+    flash(context, 'Start the dashboard');
+    return;
+  }
+  const command = commandFor(key);
+  if (command === null) return; // a symbol key set to "do nothing"
+  if (!command) {
+    flash(context, 'Set me up in ' + CLIENT);
+    return;
+  }
+  try {
+    const r = await fetch(base() + '/v1/command', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(command),
+    });
+    if (r.status === 401) {
+      setToken(null);
+      pair();
+      return;
+    }
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      send({ event: 'showAlert', context });
+      flash(context, body.error || 'Command failed');
+    }
+  } catch {
+    send({ event: 'showAlert', context });
+  }
+  setTimeout(poll, 300);
+}
+
+/** The dashboard command for a key; undefined if it isn't set up, null if it does nothing on purpose. */
+function commandFor(key) {
+  const s = key.settings;
+  switch (key.action) {
+    case ACTION.account:
+      return s.account ? { action: 'account', arg: String(s.account) } : undefined;
+    case ACTION.symbol:
+      if (!s.symbol) return undefined;
+      if (s.press === 'none') return null;
+      return { action: s.press || 'chart', arg: normalize(s.symbol) };
+    case ACTION.command:
+      return { action: s.command || 'toggle', arg: s.arg ? String(s.arg) : undefined };
+  }
+  return undefined;
+}
+
+function normalize(symbol) {
+  return String(symbol).trim().toUpperCase();
+}
+
+/** Shows a short message on one key for a few seconds. */
+function flash(context, message) {
+  const key = keys.get(context);
+  if (!key) return;
+  key.message = message;
+  key.messageUntil = Date.now() + 3000;
+  render(context);
+  setTimeout(() => render(context), 3100);
+}
+
+// ----- Drawing -----
+
+function renderAll() {
+  for (const context of keys.keys()) render(context);
+}
+
+function render(context) {
+  const key = keys.get(context);
+  if (!key) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = KEY_SIZE;
+  const g = canvas.getContext('2d');
+  g.fillStyle = COLORS.bg;
+  g.fillRect(0, 0, KEY_SIZE, KEY_SIZE);
+
+  if (key.message && Date.now() < key.messageUntil) drawMessage(g, key.message, COLORS.warn);
+  else if (status !== 'ok') drawStatus(g);
+  else if (key.action === ACTION.account) drawAccount(g, key.settings);
+  else if (key.action === ACTION.symbol) drawSymbol(g, key.settings);
+  else drawCommand(g, key.settings);
+
+  const image = canvas.toDataURL('image/png');
+  if (image === key.image) return; // unchanged: don't resend
+  key.image = image;
+  send({ event: 'setImage', context, payload: { image, target: 0 } });
+}
+
+function drawStatus(g) {
+  const text = {
+    connecting: 'Connecting…',
+    offline: 'Dashboard not running',
+    pairing: 'Approve in the dashboard',
+    unpaired: 'Press to connect',
+    declined: 'Press to connect',
+    error: 'Dashboard error',
+  }[status] || status;
+  drawMessage(g, text, status === 'offline' ? COLORS.muted : COLORS.warn);
+}
+
+function drawAccount(g, settings) {
+  const a = (state.accounts || []).find(x => x.id === settings.account || String(x.number) === String(settings.account)
+    || (x.name || '').toLowerCase() === String(settings.account || '').toLowerCase());
+  if (!a) return drawMessage(g, settings.account ? 'Account not found' : 'Pick an account', COLORS.warn);
+  if (a.selected) bar(g, COLORS.accent);
+  text(g, a.name, 72, 30, 22, COLORS.secondary, 600);
+  text(g, a.mode, 72, 50, 14, a.mode === 'LIVE' ? COLORS.warn : COLORS.muted, 600);
+  if (a.error && a.equity == null) return text(g, 'Error', 72, 90, 24, COLORS.down, 600);
+  text(g, money(a.equity, true), 72, 88, 34, COLORS.ink, 700);
+  change(g, a.dayChangePct, a.dayChange, 122);
+}
+
+function drawSymbol(g, settings) {
+  if (!settings.symbol) return drawMessage(g, 'Pick a symbol', COLORS.warn);
+  const symbol = normalize(settings.symbol);
+  const s = state.symbols?.[symbol];
+  text(g, symbol, 72, 30, 24, COLORS.secondary, 700);
+  if (!s) return text(g, '…', 72, 84, 30, COLORS.muted, 600);
+  if (s.held) bar(g, COLORS.accent);
+  text(g, price(s.price), 72, 72, 32, COLORS.ink, 700);
+  change(g, s.changePct, null, s.held ? 100 : 110);
+  if (s.held && s.unrealizedPl != null) {
+    const up = s.unrealizedPl >= 0;
+    text(g, 'P/L ' + signedMoney(s.unrealizedPl), 72, 128, 18, up ? COLORS.up : COLORS.down, 600);
+  }
+}
+
+function drawCommand(g, settings) {
+  const action = settings.command || 'toggle';
+  const label = settings.label || defaultLabel(action, settings.arg);
+  if (isActive(action, settings.arg)) bar(g, COLORS.accent);
+  wrap(g, label, 72, 72, 26, COLORS.ink, 600);
+}
+
+function defaultLabel(action, arg) {
+  if (arg) return (action === 'tab' || action === 'range' || action === 'account' ? '' : (COMMAND_LABELS[action] || action) + ' ') + arg;
+  return COMMAND_LABELS[action] || action;
+}
+
+/** Commands that select something light up while it's the one on screen. */
+function isActive(action, arg) {
+  if (!state || !arg) return false;
+  if (action === 'tab') return state.tab === String(arg).toLowerCase();
+  if (action === 'range') return (state.range || '').toUpperCase() === String(arg).toUpperCase();
+  if (action === 'account') {
+    const a = (state.accounts || []).find(x => x.selected);
+    return !!a && (String(a.number) === String(arg) || a.id === arg || a.name.toLowerCase() === String(arg).toLowerCase());
+  }
+  return false;
+}
+
+function bar(g, color) {
+  g.fillStyle = color;
+  g.fillRect(0, 0, KEY_SIZE, 6);
+}
+
+/** Day change with an arrow, so direction never rests on color alone. */
+function change(g, pct, amount, y) {
+  if (pct == null) return text(g, '—', 72, y, 22, COLORS.muted, 600);
+  const up = pct >= 0;
+  const label = (up ? '▲ ' : '▼ ') + Math.abs(pct * 100).toFixed(2) + '%' + (amount != null ? '  ' + signedMoney(amount, true) : '');
+  text(g, label, 72, y, 20, up ? COLORS.up : COLORS.down, 600);
+}
+
+/** Centered text, shrunk until it fits the key. */
+function text(g, value, x, y, size, color, weight) {
+  value = String(value ?? '');
+  let s = size;
+  do {
+    g.font = `${weight || 400} ${s}px "Segoe UI", sans-serif`;
+    s -= 1;
+  } while (g.measureText(value).width > KEY_SIZE - 12 && s > 9);
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(value, x, y);
+}
+
+/** Up to three lines, centered around y. */
+function wrap(g, value, x, y, size, color, weight) {
+  g.font = `${weight} ${size}px "Segoe UI", sans-serif`;
+  const lines = [];
+  let line = '';
+  for (const word of String(value).split(/\s+/)) {
+    const next = line ? line + ' ' + word : word;
+    if (g.measureText(next).width > KEY_SIZE - 16 && line) { lines.push(line); line = word; }
+    else line = next;
+  }
+  if (line) lines.push(line);
+  const shown = lines.slice(0, 3);
+  const lineHeight = size * 1.2;
+  shown.forEach((l, i) => text(g, l, x, y + (i - (shown.length - 1) / 2) * lineHeight, size, color, weight));
+}
+
+function drawMessage(g, message, color) {
+  wrap(g, message, 72, 72, 20, color, 600);
+}
+
+function money(v, compact) {
+  if (v == null) return '—';
+  const n = Number(v);
+  if (compact && Math.abs(n) >= 100000) return '$' + (n / 1000).toFixed(1) + 'K';
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: compact ? 0 : 2, maximumFractionDigits: compact ? 0 : 2 });
+}
+
+function signedMoney(v, compact) {
+  const n = Number(v);
+  return (n >= 0 ? '+' : '−') + money(Math.abs(n), compact);
+}
+
+/** Two decimals from $1, more for sub-dollar crypto. */
+function price(v) {
+  if (v == null) return '—';
+  const n = Number(v);
+  const digits = n >= 1 ? 2 : n >= 0.01 ? 4 : 8;
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+</script>
+</head>
+<body></body>
+</html>
