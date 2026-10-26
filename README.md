@@ -2,9 +2,10 @@
 
 A Windows desktop app (WPF, .NET 10) for managing one or more Alpaca accounts:
 account summary, equity history chart, positions with allocation and live prices,
-per-symbol price charts, recent activity and open orders, a screener, and buy/sell
-windows (orders are placed only after you confirm). Each account's full history is
-kept in a local ledger.
+per-symbol price charts, recent activity and open orders, a screener, price and P/L
+alerts, stop-limit order notifications, and buy/sell windows (orders are placed only
+after you confirm). Each account's full history is kept in a local ledger. Stream
+Deck-style hardware controllers can drive it through a local API.
 
 ## Free and paid market data plans
 
@@ -79,6 +80,71 @@ keep running while the window is minimized, using the keys of the account on scr
 On the Basic plan stock prices are IEX real-time. Alerts are saved to
 `%APPDATA%\AlpacaTools\alerts.json`.
 
+## Screener
+
+The **Screener** tab starts from one of Alpaca's stock lists (top gainers, top losers,
+most active by volume or by trades) or, with **Crypto only**, every tradable USD, USDT
+and USDC pair. Filters for price, performance and technicals (RSI, SMA 20/50/200, 52-week
+high/low, relative and dollar volume, volatility) run on your machine, so changing a
+filter costs no API calls. You can also hide or show only the symbols you hold, and
+exclude stablecoins. Click a row for its chart, double-click to open the chart in a
+window, or right-click to trade.
+
+The screen runs when the tab is first opened, when the list or **Crypto only**
+changes, and when you press **Run**. Each account keeps its own selections, saved in
+`%APPDATA%\AlpacaTools\screener.json`.
+
+## Hardware controllers (Stream Deck, Soomfon, …)
+
+The dashboard listens on `http://localhost:47823/` (localhost only) so controller
+buttons can show account totals and prices, and switch views or open trade windows. A
+controller can't place an order: Buy and Sell still open the usual window for you to
+confirm.
+
+**Buttons that run a program.** Point the button at the exe with `--do`:
+
+```
+AlpacaDashboard.exe --do buy SPY
+AlpacaDashboard.exe --do account 2
+AlpacaDashboard.exe --do tab screener
+```
+
+This hands the command to the dashboard that's already running, or starts one and runs
+it there.
+
+| Action | Argument | Does |
+|---|---|---|
+| `show` / `toggle` | | Bring the window to the front / minimize or restore it |
+| `account` | name or sidebar number | Switch account |
+| `account.next` / `account.prev` | | Cycle through accounts |
+| `tab` | `portfolio` or `screener` | Switch tab |
+| `range` | `1D`, `1W`, `1M`, `3M`, `1Y`, `All` | Equity chart range |
+| `refresh` | | Refresh the account on screen |
+| `search` | text (optional) | Focus the symbol search |
+| `chart` | symbol | Open its price chart |
+| `buy` | symbol | Open the Buy window |
+| `sell` / `close` | held symbol | Open the Trade window to sell a quantity / close the whole position |
+
+**Key plugin for SOOMFON Stream Controller and Elgato Stream Deck.** `plugins/` has a plugin that
+puts live data on the keys: **Account** (equity and day change; press to switch to it), **Symbol**
+(price and day change, plus your P/L when held; press for its chart, Buy or Sell) and **Command**
+(any action above). Run `plugins\install.ps1`. It installs into each of the two apps it finds (or
+pass `-Target soomfon` / `-Target elgato`). Restart the app, then drag the keys from the
+"Alpaca Dashboard" category. The first time, the dashboard asks you to allow the connection.
+`plugins/shared/` is the plugin itself; `plugins/soomfon/` and `plugins/elgato/` hold each
+app's manifest.
+
+**Plugins.** Every request needs `Authorization: Bearer <token>`. The token is in
+`%APPDATA%\AlpacaTools\controller.json`, which also sets the port. A plugin can get it
+with `POST /v1/pair` and `{"client": "My plugin"}` instead, which asks you in the
+dashboard first. After that:
+
+- `GET /v1/state?symbols=SPY,BTC/USD`: accounts (equity, day change, and unrealized P/L
+  for the account on screen), the current tab and range, and each symbol's price and day
+  change. Symbols you hold include quantity and P/L. Other symbols are polled with one
+  snapshot request per asset type every 15s, and only while a key keeps asking for them.
+- `POST /v1/command` with `{"action": "buy", "arg": "SPY"}`: the actions above.
+
 ## Going easy on the API
 
 Alpaca's limits are per API key and shared with anything else using that key, such as
@@ -92,9 +158,12 @@ trading bots or screeners. The dashboard keeps its share small:
 | Accounts not on screen | Every 5 min |
 | Crypto fee tier (30-day fills) | Every 60 min |
 | Ledger history download | Once per account, one page every 3s (15s with bot priority); afterwards free |
-| Price-chart windows | Cached per range for 5 min; Refresh forces a reload |
+| Price-chart windows | Cached per range for 5 min; Refresh forces a reload. Each load includes ~200 bars before the range so overlays (moving averages etc.) start at its left edge; toggling an overlay costs nothing |
 | Symbol search list (all stocks + crypto) | Two requests the first time you search, cached 6 hours per account; typing costs nothing |
 | Price alerts | Every 30s, one request for all stock alerts and one for crypto; only while an alert is watching. Streamed positions are checked instantly |
+| Stop-limit order watch | Open orders once a minute per account, and at once on an order event |
+| Screener | Only when it runs: the stock list (or the crypto pair list, cached 6 hours), one snapshot request, and daily bars for the indicators (cached 30 min) |
+| Controller keys | Symbols not held in the account on screen: one snapshot request per asset type every 15s, only while a key asks for them |
 | While minimized | Nothing but price alerts; the rest catches up when restored |
 
 Every request also goes through a per-key budget (`Services/ApiBudget.cs`). The
@@ -134,8 +203,8 @@ dotnet run --project src/AlpacaDashboard
 
 Click **+ Add account**, paste an API key ID + secret from the Alpaca dashboard,
 tick **Paper** for paper accounts, then **Test connection** and **Save**. Add as many
-accounts as you like; the sidebar shows each one's equity and day change, and the
-selected account refreshes fully every 60 seconds.
+accounts as you like; the sidebar shows each one's equity and day change. See
+[Going easy on the API](#going-easy-on-the-api) for how often each part refreshes.
 
 ## Publish a single .exe
 
@@ -161,8 +230,16 @@ GitHub Release.
 | `Services/ApiBudget.cs` | Per-key request cap, rate-limit header tracking, 429 back-off |
 | `ViewModels/AlertsViewModel.cs` | Price alerts: checking, firing, the Alerts tab |
 | `Services/AlertNotifier.cs` | Tray icon and Windows notifications for alerts |
+| `Services/AlertStore.cs` | Saves alerts to `alerts.json` |
+| `ViewModels/StopOrderWatchViewModel.cs` | Watches open stop-limit sells and notifies at each step |
+| `Services/OrderWatchStore.cs` | Remembers which order steps were already notified (`order-watch.json`) |
+| `ViewModels/ScreenerViewModel.cs` + `ScreenerFilters.cs` | Screener: lists, indicators, client-side filters |
+| `Services/ScreenerSettingsStore.cs` | Per-account screener selections (`screener.json`) |
+| `Services/ControllerServer.cs` | Local HTTP API for hardware controllers: pairing, token, `--do` hand-off |
+| `ViewModels/ControllerHost.cs` | What controllers can see and do: state, commands, bringing the window forward |
 | `Services/FeeEstimator.cs` | Estimated fees to close a position (rates from Alpaca's fee schedule) |
 | `ViewModels/SymbolChartViewModel.cs` | Candlestick + volume chart window |
+| `ViewModels/ChartOverlays.cs` + `Services/ChartSettingsStore.cs` | Chart overlays (trend line and channel, auto trendlines, support/resistance, SMA, EMA, Bollinger, VWAP), and the saved overlay choice and drawn lines (`chart.json`) |
 | `ViewModels/SymbolSearchViewModel.cs` + `Views/SymbolSearchBox.xaml` | Type-ahead symbol search in the tab strip (Ctrl+F) |
 | `Models/LedgerEntry.cs` | Broker-neutral ledger entry and sync state |
 | `Services/LedgerStore.cs` | SQLite ledger: entries, sync state, summary |
